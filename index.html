@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shubh Deepavali 3D ✨ Real Celebration Hub</title>
+  <meta name="description" content="An ultra-bright, interactive 3D Diwali celebration featuring real authentic Aarti and flute audios, real festive videos, interactive Diya lighting, light-painting sparklers, and 3D fireworks.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Outfit:wght@300;400;600;700;800&family=Rozha+One&family=Yatra+One&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- 3D WebGL Canvas Container -->
+  <div id="canvas-container"></div>
+
+  <!-- Decorative Hanging Toran & Fairy Lights at Top -->
+  <div class="toran-header">
+    <div class="fairy-lights" id="fairyLights"></div>
+    <div class="toran-leaves">
+      <span>🍃</span><span>🌼</span><span>🍃</span><span>🌸</span>
+      <span>🍃</span><span>🌼</span><span>🍃</span><span>🌸</span>
+      <span>🍃</span><span>🌼</span><span>🍃</span><span>🌸</span>
+      <span>🍃</span><span>🌼</span><span>🍃</span><span>🌸</span>
+      <span>🍃</span><span>🌼</span><span>🍃</span><span>🌸</span>
+    </div>
+  </div>
+
+  <!-- Top Festive Header & Real Audio / Video Bar -->
+  <header class="top-nav-hud">
+    <div class="logo-area">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span class="brand-badge">✨ शुभ दीपावली • FESTIVAL OF LIGHTS ✨</span>
+        <span class="streamer-badge" title="100% Royalty Free & Safe for Live Streaming (No Content ID Claims)">🟢 Streamer Safe</span>
+      </div>
+      <h1 class="brand-title">SHUBH DEEPAVALI <span class="dim3d">3D</span></h1>
+    </div>
+
+    <!-- Sky Atmosphere Selector -->
+    <div class="atmosphere-picker">
+      <span class="atmo-label">Sky Mood:</span>
+      <button class="atmo-chip active" data-atmo="midnight" title="Radiant Midnight Starlight">🌌 Midnight</button>
+      <button class="atmo-chip" data-atmo="twilight" title="Sandhya Sunset Twilight">🌇 Twilight</button>
+      <button class="atmo-chip" data-atmo="golden" title="Sacred Golden Deepotsav Radiance">🪔 Golden</button>
+    </div>
+
+    <div class="global-actions">
+      <!-- Real Video Cinema Modal Trigger -->
+      <button id="openCinemaBtn" class="hud-pill-btn cinema-btn" title="Watch Actual Real Diwali Fireworks & Deepotsav Videos">
+        <span class="icon">🎬</span>
+        <span class="label">Real Videos</span>
+      </button>
+
+      <!-- Real Audio Jukebox Dropdown & Play -->
+      <div class="real-audio-dock">
+        <button id="playRealMusicBtn" class="hud-pill-btn audio-play-btn" title="Play Authentic Temple Aarti / Flute">
+          <span class="icon" id="musicPlayIcon">▶️</span>
+          <span class="label" id="musicPlayLabel">Play Real Music</span>
+        </button>
+        <select id="realTrackSelector" class="track-select" title="Choose Real Audio Track">
+          <option value="aarti">🪔 Real Temple Aarti</option>
+          <option value="flute">🎶 Real Bansuri Flute</option>
+          <option value="sitar">🪕 Real Classical Sitar</option>
+        </select>
+      </div>
+
+      <!-- Stream Mode / Clean OBS View Toggle -->
+      <button id="streamViewBtn" class="hud-pill-btn stream-pill-btn" title="Toggle Clean Cinematic View for Live Stream / OBS (Hotkey: H)">
+        <span class="icon">📺</span>
+        <span class="label">OBS Mode</span>
+      </button>
+
+      <!-- Postcard Photo Booth -->
+      <button id="postcardBtn" class="hud-pill-btn postcard-pill-btn" title="Capture 3D Scene into a Customized Greeting Card">
+        <span class="icon">📸</span>
+        <span class="label">Postcard</span>
+      </button>
+
+      <!-- Mega Fireworks Finale -->
+      <button id="megaFinaleBtn" class="hud-pill-btn grand-firework-btn pulse-glow" title="Burst a Spectacular Grand Diwali Finale">
+        <span class="icon">🎆</span>
+        <span class="label">Grand Finale!</span>
+      </button>
+
+      <!-- Blender 3D HD Render Download / View -->
+      <a href="/diwali_render.png" target="_blank" class="hud-pill-btn blender-pill-btn" title="View & Download 1080p Cinematic 3D Render generated in Blender" style="text-decoration:none;">
+        <span class="icon">🎨</span>
+        <span class="label">Blender 1080p</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- Camera Viewpoint Selector (Floating Left) -->
+  <aside class="camera-hud">
+    <div class="camera-label">🎥 Camera View</div>
+    <div class="camera-buttons">
+      <button class="cam-btn active" data-view="orbit" title="Freely orbit & explore in 3D">
+        <span class="cam-icon">🌐</span>
+        <span>Free Orbit</span>
+      </button>
+      <button class="cam-btn" data-view="courtyard" title="Courtyard & Diya close-up">
+        <span class="cam-icon">🪔</span>
+        <span>Courtyard</span>
+      </button>
+      <button class="cam-btn" data-view="ghat" title="Sacred water ghat view">
+        <span class="cam-icon">🌊</span>
+        <span>Water Ghat</span>
+      </button>
+      <button class="cam-btn" data-view="sky" title="Panoramic night sky view">
+        <span class="cam-icon">🌌</span>
+        <span>Night Sky</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Interactive Action Modes HUD (Bottom Center) -->
+  <nav class="bottom-action-dock">
+    <button class="mode-tab active" data-mode="diya">
+      <span class="mode-icon">🪔</span>
+      <span class="mode-title">Light Diyas</span>
+      <span class="mode-desc">Click unlit diyas</span>
+    </button>
+    <button class="mode-tab" data-mode="sparkler">
+      <span class="mode-icon">🪄</span>
+      <span class="mode-title">Phuljhadi</span>
+      <span class="mode-desc">3D Light Painting</span>
+    </button>
+    <button class="mode-tab" data-mode="aarti">
+      <span class="mode-icon">🕯️</span>
+      <span class="mode-title">Maha Aarti</span>
+      <span class="mode-desc">Holy Brass Thali</span>
+    </button>
+    <button class="mode-tab" data-mode="rocket">
+      <span class="mode-icon">🚀</span>
+      <span class="mode-title">Sky Rocket</span>
+      <span class="mode-desc">Click sky to launch</span>
+    </button>
+    <button class="mode-tab" data-mode="anar">
+      <span class="mode-icon">🌋</span>
+      <span class="mode-title">Anar Fountain</span>
+      <span class="mode-desc">Spark flowerpot</span>
+    </button>
+    <button class="mode-tab" data-mode="chakri">
+      <span class="mode-icon">🌀</span>
+      <span class="mode-title">Chakri</span>
+      <span class="mode-desc">Ground spinner</span>
+    </button>
+    <button class="mode-tab" data-mode="lantern">
+      <span class="mode-icon">🏮</span>
+      <span class="mode-title">Wish Lantern</span>
+      <span class="mode-desc">Send wish to stars</span>
+    </button>
+  </nav>
+
+  <!-- Mode Specific Action Sub-Toolbar -->
+  <div class="sub-toolbar" id="subToolbar">
+    <!-- Diya Mode Controls -->
+    <div class="sub-panel" id="panel-diya">
+      <div class="diya-stats">
+        <span>Courtyard Diyas: </span>
+        <strong id="diyaCounterDisplay">0 / 14 Lit</strong>
+      </div>
+      <button id="lightAllDiyasBtn" class="hud-action-btn glow-amber">🔥 Light All Diyas</button>
+      <button id="resetDiyasBtn" class="hud-action-btn outline">💨 Extinguish</button>
+      <button id="spawnFloatingDiyaBtn" class="hud-action-btn lotus">🪷 Float Lotus Diya</button>
+    </div>
+
+    <!-- Sparkler Controls -->
+    <div class="sub-panel" id="panel-sparkler" style="display:none;">
+      <span class="hud-hint">🪄 Move your cursor to paint golden light trails in 3D air! Sizzling sparks follow your wand:</span>
+      <button id="clearTrailBtn" class="hud-action-btn outline">🧹 Clear Trail</button>
+    </div>
+
+    <!-- Maha Aarti Mode Controls -->
+    <div class="sub-panel" id="panel-aarti" style="display:none;">
+      <span class="hud-hint">🕯️ Panch-Pradip Brass Aarti Thali with camphor flames & flowers:</span>
+      <button id="performAartiBtn" class="hud-action-btn glow-gold">✨ Perform Maha Aarti Ceremony</button>
+      <button id="soundShankhaBtn" class="hud-action-btn outline">🐚 Blow Shankha (Conch)</button>
+    </div>
+
+    <!-- Rocket Mode Controls -->
+    <div class="sub-panel" id="panel-rocket" style="display:none;">
+      <span class="hud-hint">🎯 Click anywhere in the 3D sky to launch a whistling rocket:</span>
+      <button id="barrageRocketsBtn" class="hud-action-btn glow-amber">🚀 Triple Rocket Salvo</button>
+    </div>
+
+    <!-- Anar Mode Controls -->
+    <div class="sub-panel" id="panel-anar" style="display:none;">
+      <span class="hud-hint">🌋 Click anywhere on the courtyard stone ground to place & ignite an Anar!</span>
+      <button id="multiAnarBtn" class="hud-action-btn glow-amber">💥 Ignite 3 Anars</button>
+    </div>
+
+    <!-- Chakri Mode Controls -->
+    <div class="sub-panel" id="panel-chakri" style="display:none;">
+      <span class="hud-hint">🌀 Click on the courtyard ground to ignite a whirling Chakri!</span>
+      <button id="twinChakriBtn" class="hud-action-btn glow-amber">🌪️ Twin Chakris</button>
+    </div>
+
+    <!-- Wish Lantern Controls -->
+    <div class="sub-panel" id="panel-lantern" style="display:none;">
+      <span class="hud-hint">🏮 Write a sincere prayer and release your glowing lantern into the heavens:</span>
+      <button id="openWishModalBtn" class="hud-action-btn glow-gold">✍️ Write & Release Wish</button>
+    </div>
+  </div>
+
+  <!-- Instruction Tip -->
+  <div class="interaction-hint" id="interactionHint">
+    💡 <span>Drag left/right to rotate view in 3D • Scroll to zoom • Click unlit diyas to ignite</span>
+  </div>
+
+  <!-- Real Video Cinema Modal -->
+  <div class="modal-overlay" id="cinemaModalOverlay">
+    <div class="festive-modal cinema-modal">
+      <div class="modal-header">
+        <span class="modal-icon">🎬</span>
+        <h2>Actual Real Diwali Celebrations & Fireworks</h2>
+        <button class="modal-close" id="closeCinemaModalBtn">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-intro">Watch genuine high-definition festive fireworks and real ground crackers:</p>
+        <div class="cinema-video-frame">
+          <video id="realCinemaVideo" controls autoplay loop playsinline>
+            <source src="/videos/grand_fireworks.mp4" type="video/mp4">
+          </video>
+        </div>
+        <div class="video-channel-pills">
+          <button class="channel-pill active" data-src="/videos/grand_fireworks.mp4">🎆 Real Sky Fireworks</button>
+          <button class="channel-pill" data-src="/videos/diwali_crackers_01.ogv">🪔 Real Ground Crackers</button>
+          <button class="channel-pill" data-src="/videos/diwali_crackers_02.ogv">🌋 Real Phuljhadi & Anar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal for Wish Lantern -->
+  <div class="modal-overlay" id="wishModalOverlay">
+    <div class="festive-modal">
+      <div class="modal-header">
+        <span class="modal-icon">🏮</span>
+        <h2>Release a Sacred Diwali Wish</h2>
+        <button class="modal-close" id="closeWishModalBtn">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-intro">Your prayer will be inscribed upon a luminous 3D sky lantern and released towards the heavens, carrying your blessings into the cosmos.</p>
+        
+        <div class="input-group">
+          <label for="wishInput">Your Diwali Prayer / Wish:</label>
+          <textarea id="wishInput" rows="3" placeholder="e.g. Wishing eternal health, peace, and abundance for my family and the world..."></textarea>
+        </div>
+
+        <div class="input-group">
+          <label for="wishAuthor">Your Name:</label>
+          <input type="text" id="wishAuthor" placeholder="e.g. Aryan & Family" value="Devotee">
+        </div>
+
+        <div class="quick-wishes">
+          <span>Quick wishes: </span>
+          <button class="quick-wish-chip" data-text="May light always triumph over darkness and wisdom over ignorance!">✨ Light & Wisdom</button>
+          <button class="quick-wish-chip" data-text="Wishing boundless health, happiness, and prosperity to all beings!">🌸 Health & Prosperity</button>
+          <button class="quick-wish-chip" data-text="May all homes be blessed with peace, harmony, and radiant joy!">🕊️ Peace & Harmony</button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="releaseLanternBtn" class="hud-action-btn glow-gold full-width">
+          ✨ Release Lantern into Sky
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Postcard Generator Modal -->
+  <div class="modal-overlay" id="postcardModalOverlay">
+    <div class="festive-modal postcard-modal">
+      <div class="modal-header">
+        <span class="modal-icon">📸</span>
+        <h2>3D Diwali Greeting Postcard</h2>
+        <button class="modal-close" id="closePostcardModalBtn">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-intro">Your live 3D view has been captured into an ornate festival postcard with royal gold borders!</p>
+        
+        <div class="postcard-canvas-wrapper">
+          <canvas id="postcardCanvas" width="900" height="600"></canvas>
+        </div>
+
+        <div class="postcard-inputs">
+          <div class="input-group">
+            <label for="postcardRecipient">To (Recipient):</label>
+            <input type="text" id="postcardRecipient" value="Dear Loved Ones">
+          </div>
+          <div class="input-group">
+            <label for="postcardSender">From (Sender):</label>
+            <input type="text" id="postcardSender" value="With Love & Blessings">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="downloadPostcardBtn" class="hud-action-btn glow-gold full-width">
+          📥 Download Postcard as PNG
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Wish Reader Popup -->
+  <div class="wish-card-popup" id="wishCardPopup">
+    <div class="popup-pin">🏮 Sky Lantern Wish</div>
+    <p class="popup-wish-text" id="popupWishText"></p>
+    <div class="popup-wish-author" id="popupWishAuthor"></div>
+    <button class="popup-close-btn" id="closePopupBtn">Close</button>
+  </div>
+
+  <!-- Notification Toast -->
+  <div class="toast-notification" id="toastNotice">Happy Diwali! 🪔✨</div>
+
+  <!-- Main 3D App Controller -->
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
