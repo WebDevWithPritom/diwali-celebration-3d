@@ -5,3 +5,4 @@ Write-Host "Creating GitHub repo WebDevWithPritom/diwali-celebration-3d..."
 gh repo create WebDevWithPritom/diwali-celebration-3d --public --source=. --remote=origin
 Write-Host "Pushing main branch..."
 git push -u origin main
+

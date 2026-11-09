@@ -7,699 +7,699 @@ import { DiyaManager } from './diyas.js';
 import { LanternManager } from './lanterns.js';
 
 // ==========================================================================
-// MAIN 3D APP CONTROLLER - INTERACTIVE, BRIGHT & ZERO-LAG
+// APP CONTROLLER: wires the 3D scene to the controls
 // ==========================================================================
+
+const $ = (id) => document.getElementById(id);
+const reduceMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+const MODE_HINTS = {
+  diya: 'Tap an unlit diya to light it.',
+  sparkler: 'Move across the scene to write with light. On touch, drag.',
+  aarti: 'Circle the brass thali clockwise around the rangoli.',
+  rocket: 'Tap the sky to launch a rocket from below it.',
+  anar: 'Tap the courtyard floor to light an anar.',
+  chakri: 'Tap the courtyard floor to spin a chakri.',
+  lantern: 'Write a wish, or tap a lantern in the sky to read one.'
+};
+
+const VIEWS = {
+  orbit: { pos: [0, 15, 27], look: [0, 1.5, -2] },
+  courtyard: { pos: [0, 5.5, 7.5], look: [0, 0.5, -5] },
+  ghat: { pos: [-6, 3.5, 20], look: [4, -1, 34] },
+  sky: { pos: [0, 6, 22], look: [0, 34, -16] }
+};
 
 class DiwaliApp {
   constructor() {
-    this.container = document.getElementById('canvas-container');
-    this.currentMode = 'diya'; // diya, sparkler, aarti, rocket, anar, chakri, lantern
-    this.clock = new THREE.Clock();
-
-    // Raycasting & Interaction
+    this.container = $('canvas-container');
+    this.currentMode = 'diya';
+    this.timer = new THREE.Timer();
+    this.timer.connect(document);
     this.raycaster = new THREE.Raycaster();
-    this.mouse = new THREE.Vector2();
-    this.isPointerDown = false;
-    this.pointerDownPos = { x: 0, y: 0 };
-
-    // Camera viewpoints
-    this.targetCamPos = new THREE.Vector3(0, 16, 28);
-    this.targetLookAt = new THREE.Vector3(0, 2, 0);
+    this.pointer = new THREE.Vector2();
+    this.pointerDown = null;
+    this.targetCamPos = new THREE.Vector3();
+    this.targetLookAt = new THREE.Vector3();
     this.isTransitioningCam = false;
-
+    this.reduceMotion = reduceMotionQuery.matches;
+    this.nextAmbient = 4;
+    this.started = false;
+    this.allLitAnnounced = false;
+    this.openModalEl = null;
     this.init();
   }
 
   init() {
-    // 1. Setup Radiant 3D Scene
     this.diwaliScene = new DiwaliScene(this.container);
     this.scene = this.diwaliScene.scene;
     this.camera = this.diwaliScene.camera;
     this.renderer = this.diwaliScene.renderer;
 
-    // 2. Setup Orbit Controls
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
-    this.controls.dampingFactor = 0.05;
-    this.controls.maxPolarAngle = Math.PI / 2 + 0.05;
+    this.controls.dampingFactor = 0.06;
+    this.controls.minPolarAngle = 0.15;
+    this.controls.maxPolarAngle = Math.PI / 2 - 0.02;
     this.controls.minDistance = 4;
-    this.controls.maxDistance = 120;
-    this.controls.target.set(0, 2, 0);
+    this.controls.maxDistance = 70;
+    this.controls.enablePan = false;
+    this.controls.addEventListener('start', () => { this.isTransitioningCam = false; });
 
-    // 3. Setup Subsystems
     this.particleEngine = new ParticleEngine(this.scene);
-    this.diyaManager = new DiyaManager(this.scene, this.particleEngine);
+    this.particleEngine.setCamera(this.camera);
+    this.diyaManager = new DiyaManager(this.scene, this.particleEngine, { onChange: () => this.updateDiyaCounter() });
     this.lanternManager = new LanternManager(this.scene);
 
-    // 4. Setup Fairy Lights in HTML DOM
-    this.setupDOMFairyLights();
+    this.diwaliScene.onAartiStart = () => this.syncMusicUI();
 
-    // 5. Setup UI & Media Controls
-    this.setupUI();
-    this.setupRealAudioControls();
-    this.setupRealVideoCinema();
-    this.setupPointerInteractions();
+    const onResize = () => {
+      this.diwaliScene.onWindowResize();
+      this.particleEngine.setViewport(this.renderer.domElement.height, this.camera.fov);
+    };
+    window.addEventListener('resize', onResize);
+    onResize();
 
-    // 6. Update Counter
+    this.applyMotionPreference();
+    reduceMotionQuery.addEventListener('change', (e) => {
+      this.reduceMotion = e.matches;
+      this.applyMotionPreference();
+    });
+
+    this.setView('orbit', true);
+    this.setupIntro();
+    this.setupTopBar();
+    this.setupPanel();
+    this.setupModes();
+    this.setupActions();
+    this.setupModals();
+    this.setupPointer();
+    this.setupKeyboard();
     this.updateDiyaCounter();
 
-    // 7. Start 60 FPS Render Loop
+    if (window.innerWidth >= 1280) document.body.classList.add('panel-open');
+    this.syncPanelButton();
+
     this.animate = this.animate.bind(this);
-    requestAnimationFrame(this.animate);
-
-    setTimeout(() => {
-      this.showToast("✨ Shubh Deepavali! May the sacred light bless your life! 🪔");
-    }, 1000);
+    this.renderer.setAnimationLoop(this.animate);
   }
 
-  setupDOMFairyLights() {
-    const fairyContainer = document.getElementById('fairyLights');
-    if (!fairyContainer) return;
-    const colors = ['#ff3b30', '#ff9500', '#ffd60a', '#30d158', '#64d2ff', '#bf5af2', '#ff375f'];
-    for (let i = 0; i < 28; i++) {
-      const bulb = document.createElement('div');
-      bulb.className = 'fairy-light';
-      bulb.style.color = colors[i % colors.length];
-      bulb.style.backgroundColor = colors[i % colors.length];
-      bulb.style.animationDelay = `${(i * 0.12).toFixed(2)}s`;
-      fairyContainer.appendChild(bulb);
-    }
+  applyMotionPreference() {
+    const m = this.reduceMotion ? 0.15 : 1;
+    this.diwaliScene.setMotion(m);
+    this.particleEngine.setMotion(m);
+    this.diyaManager.setMotion(m);
+    this.lanternManager.setMotion(m);
+    this.controls.enableDamping = !this.reduceMotion;
   }
 
-  setupRealAudioControls() {
-    const playMusicBtn = document.getElementById('playRealMusicBtn');
-    const trackSelector = document.getElementById('realTrackSelector');
-    const playIcon = document.getElementById('musicPlayIcon');
-    const playLabel = document.getElementById('musicPlayLabel');
-
-    playMusicBtn.addEventListener('click', () => {
-      const isPlaying = audio.toggleMusic();
-      playIcon.textContent = isPlaying ? "⏸️" : "▶️";
-      playLabel.textContent = isPlaying ? "Playing Music" : "Play Real Music";
-      this.showToast(isPlaying ? `🎵 Real Audio: ${trackSelector.options[trackSelector.selectedIndex].text}` : "🔇 Music Paused");
-    });
-
-    trackSelector.addEventListener('change', () => {
-      const selected = trackSelector.value;
-      audio.playRealTrack(selected);
-      playIcon.textContent = "⏸️";
-      playLabel.textContent = "Playing Music";
-      this.showToast(`🎶 Switched to: ${trackSelector.options[trackSelector.selectedIndex].text}`);
-    });
-  }
-
-  setupRealVideoCinema() {
-    const cinemaModal = document.getElementById('cinemaModalOverlay');
-    const openCinemaBtn = document.getElementById('openCinemaBtn');
-    const closeCinemaBtn = document.getElementById('closeCinemaModalBtn');
-    const cinemaVideo = document.getElementById('realCinemaVideo');
-    const channelPills = document.querySelectorAll('.channel-pill');
-
-    openCinemaBtn.addEventListener('click', () => {
-      cinemaModal.classList.add('open');
-      if (cinemaVideo) cinemaVideo.play().catch(() => {});
-    });
-
-    closeCinemaBtn.addEventListener('click', () => {
-      cinemaModal.classList.remove('open');
-      if (cinemaVideo) cinemaVideo.pause();
-    });
-
-    cinemaModal.addEventListener('click', (e) => {
-      if (e.target === cinemaModal) {
-        cinemaModal.classList.remove('open');
-        if (cinemaVideo) cinemaVideo.pause();
-      }
-    });
-
-    channelPills.forEach(pill => {
-      pill.addEventListener('click', () => {
-        channelPills.forEach(p => p.classList.remove('active'));
-        pill.classList.add('active');
-        const src = pill.dataset.src;
-        if (cinemaVideo) {
-          cinemaVideo.src = src;
-          cinemaVideo.play().catch(() => {});
-        }
-        this.showToast(`📹 Loaded Real Video: ${pill.textContent.trim()}`);
-      });
-    });
-  }
-
-  setupUI() {
-    // 1. Atmosphere Picker
-    document.querySelectorAll('.atmo-chip').forEach(chip => {
-      chip.addEventListener('click', () => {
-        document.querySelectorAll('.atmo-chip').forEach(c => c.classList.remove('active'));
-        chip.classList.add('active');
-        const atmo = chip.dataset.atmo;
-        this.diwaliScene.setAtmosphere(atmo);
-        this.showToast(`🌅 Sky Mood: ${chip.textContent.trim()}`);
-      });
-    });
-
-    // 2. Camera View Buttons
-    const camButtons = document.querySelectorAll('.cam-btn');
-    camButtons.forEach(btn => {
-      btn.addEventListener('click', () => {
-        camButtons.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        const view = btn.dataset.view;
-        this.switchCameraView(view);
-      });
-    });
-
-    // 3. Mode Tabs
-    const modeTabs = document.querySelectorAll('.mode-tab');
-    modeTabs.forEach(tab => {
-      tab.addEventListener('click', () => {
-        modeTabs.forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
-        this.setMode(tab.dataset.mode);
-      });
-    });
-
-    // 4. Diya Actions
-    document.getElementById('lightAllDiyasBtn').addEventListener('click', () => {
-      this.diyaManager.lightAll();
-      setTimeout(() => this.updateDiyaCounter(), 1000);
-      this.showToast("🔥 All Holy Diyas Illuminated!");
-    });
-
-    document.getElementById('resetDiyasBtn').addEventListener('click', () => {
-      this.diyaManager.resetAll();
-      this.updateDiyaCounter();
-      this.showToast("💨 Courtyard Diyas Reset");
-    });
-
-    document.getElementById('spawnFloatingDiyaBtn').addEventListener('click', () => {
-      this.diyaManager.createFloatingLotusDiya(-25 + Math.random() * 10, 24 + Math.random() * 14);
-      audio.playDiyaChime();
-      this.showToast("🪷 Floating Lotus Diya released on Pavana Sarovar!");
-    });
-
-    // 5. Sparkler Controls
-    document.getElementById('clearTrailBtn').addEventListener('click', () => {
-      this.particleEngine.lightTrailPoints = [];
-      this.showToast("🧹 Light Painting Trail Cleared");
-    });
-
-    // 6. Maha Aarti Controls
-    document.getElementById('performAartiBtn').addEventListener('click', () => {
-      this.diwaliScene.performMahaAarti();
-      this.showToast("✨ Divine Maha Aarti Ceremony in Motion!");
-    });
-
-    document.getElementById('soundShankhaBtn').addEventListener('click', () => {
-      audio.playShankha();
-      this.showToast("🐚 Auspicious Shankha Resonating!");
-    });
-
-    // 7. Rocket Barrage
-    document.getElementById('barrageRocketsBtn').addEventListener('click', () => {
-      for (let i = 0; i < 3; i++) {
-        setTimeout(() => {
-          this.particleEngine.launchRocket();
-        }, i * 350);
-      }
-    });
-
-    // 8. Anar Actions
-    document.getElementById('multiAnarBtn').addEventListener('click', () => {
-      const positions = [
-        new THREE.Vector3(-6, 0, -4),
-        new THREE.Vector3(0, 0, -8),
-        new THREE.Vector3(6, 0, -4)
-      ];
-      positions.forEach((pos, i) => {
-        setTimeout(() => {
-          this.particleEngine.createAnarFountain(pos);
-        }, i * 300);
-      });
-      this.showToast("💥 3 Sparkling Anars Ignited!");
-    });
-
-    // 9. Chakri Actions
-    document.getElementById('twinChakriBtn').addEventListener('click', () => {
-      this.particleEngine.createChakriSpinner(new THREE.Vector3(-5, 0.05, -2));
-      this.particleEngine.createChakriSpinner(new THREE.Vector3(5, 0.05, -2));
-      this.showToast("🌪️ Twin Ground Chakris Spinning!");
-    });
-
-    // 10. Wish Modal
-    const wishModal = document.getElementById('wishModalOverlay');
-    const openWishBtn = document.getElementById('openWishModalBtn');
-    const closeWishBtn = document.getElementById('closeWishModalBtn');
-    const releaseWishBtn = document.getElementById('releaseLanternBtn');
-
-    openWishBtn.addEventListener('click', () => {
-      wishModal.classList.add('open');
-    });
-
-    closeWishBtn.addEventListener('click', () => {
-      wishModal.classList.remove('open');
-    });
-
-    wishModal.addEventListener('click', (e) => {
-      if (e.target === wishModal) wishModal.classList.remove('open');
-    });
-
-    document.querySelectorAll('.quick-wish-chip').forEach(chip => {
-      chip.addEventListener('click', () => {
-        document.getElementById('wishInput').value = chip.dataset.text;
-      });
-    });
-
-    releaseWishBtn.addEventListener('click', () => {
-      const wish = document.getElementById('wishInput').value.trim() || "Happy Diwali! May light forever triumph over darkness! 🪔";
-      const author = document.getElementById('wishAuthor').value.trim() || "Devotee";
-
-      this.lanternManager.releaseLantern(wish, author);
-      audio.playDiyaChime();
-      wishModal.classList.remove('open');
-      this.showToast(`🏮 Sacred Wish Released into the Heavens!`);
-    });
-
-    // 11. Postcard Modal
-    const postcardBtn = document.getElementById('postcardBtn');
-    const postcardModal = document.getElementById('postcardModalOverlay');
-    const closePostcardBtn = document.getElementById('closePostcardModalBtn');
-    const downloadPostcardBtn = document.getElementById('downloadPostcardBtn');
-
-    postcardBtn.addEventListener('click', () => {
-      this.renderFestivePostcard();
-      postcardModal.classList.add('open');
-    });
-
-    closePostcardBtn.addEventListener('click', () => {
-      postcardModal.classList.remove('open');
-    });
-
-    postcardModal.addEventListener('click', (e) => {
-      if (e.target === postcardModal) postcardModal.classList.remove('open');
-    });
-
-    ['postcardRecipient', 'postcardSender'].forEach(id => {
-      document.getElementById(id).addEventListener('input', () => {
-        this.renderFestivePostcard();
-      });
-    });
-
-    downloadPostcardBtn.addEventListener('click', () => {
-      const canvas = document.getElementById('postcardCanvas');
-      const link = document.createElement('a');
-      link.download = `Shubh_Deepavali_Postcard.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
-      this.showToast("📥 Postcard Downloaded! Share it with loved ones! 🪔");
-    });
-
-    // 12. Grand Finale Button
-    document.getElementById('megaFinaleBtn').addEventListener('click', () => this.triggerGrandFinale());
-
-    // 13. Stream Mode (Clean OBS View) Toggle & Keyboard Shortcuts
-    const streamViewBtn = document.getElementById('streamViewBtn');
-    let isCleanStream = false;
-
-    const toggleStreamMode = () => {
-      isCleanStream = !isCleanStream;
-      document.body.classList.toggle('clean-stream-view', isCleanStream);
-      this.showToast(isCleanStream ? "📺 Stream Mode: HUD Hidden (Press 'H' to show)" : "📺 UI Restored");
+  // ------------------------------------------------------------------------
+  setupIntro() {
+    const enter = (withMusic) => {
+      if (this.started) return;
+      this.started = true;
+      audio.ensureContext();
+      document.body.classList.remove('is-intro');
+      if (withMusic) audio.playRealTrack($('realTrackSelector').value);
+      this.syncMusicUI();
+      setTimeout(() => this.showToast('Shubh Deepavali! Tap a diya to begin.'), 900);
     };
+    $('enterWithMusic').addEventListener('click', () => enter(true));
+    $('enterQuiet').addEventListener('click', () => enter(false));
+    $('enterWithMusic').focus({ preventScroll: true });
+  }
 
-    if (streamViewBtn) {
-      streamViewBtn.addEventListener('click', toggleStreamMode);
+  setupTopBar() {
+    const selects = [$('realTrackSelector'), $('trackSelectPanel')];
+    $('playRealMusicBtn').addEventListener('click', () => {
+      audio.ensureContext();
+      if (audio.bgAudio.paused) audio.playRealTrack(selects[0].value);
+      else audio.stopRealTrack();
+    });
+    selects.forEach((sel) => sel.addEventListener('change', () => {
+      selects.forEach((s) => { s.value = sel.value; });
+      audio.playRealTrack(sel.value);
+      this.showToast(`Now playing: ${sel.options[sel.selectedIndex].text}`);
+    }));
+    audio.bgAudio.addEventListener('play', () => this.syncMusicUI());
+    audio.bgAudio.addEventListener('pause', () => this.syncMusicUI());
+    audio.bgAudio.addEventListener('error', () => {
+      this.syncMusicUI();
+      this.showToast('That track could not be loaded.');
+    });
+
+    $('soundBtn').addEventListener('click', () => {
+      audio.soundEnabled = !audio.soundEnabled;
+      if (!audio.soundEnabled) audio.stopSparklerSound();
+      else if (this.currentMode === 'sparkler') audio.startSparklerSound();
+      const btn = $('soundBtn');
+      btn.setAttribute('aria-pressed', String(audio.soundEnabled));
+      btn.setAttribute('aria-label', audio.soundEnabled ? 'Sound effects on' : 'Sound effects off');
+      $('soundIcon').setAttribute('href', audio.soundEnabled ? '#i-sound' : '#i-mute');
+    });
+
+    $('megaFinaleBtn').addEventListener('click', () => this.triggerGrandFinale());
+    $('menuBtn').addEventListener('click', () => {
+      document.body.classList.toggle('panel-open');
+      this.syncPanelButton();
+    });
+  }
+
+  syncMusicUI() {
+    const playing = !audio.bgAudio.paused;
+    $('musicIcon').setAttribute('href', playing ? '#i-pause' : '#i-play');
+    $('playRealMusicBtn').setAttribute('aria-label', playing ? 'Pause music' : 'Play music');
+    document.querySelector('.music').classList.toggle('is-playing', playing);
+    if (audio.currentTrack) {
+      $('realTrackSelector').value = audio.currentTrack;
+      $('trackSelectPanel').value = audio.currentTrack;
     }
+  }
 
-    // Keyboard Shortcuts for Live Streamers
-    window.addEventListener('keydown', (e) => {
-      // Ignore if typing in text inputs or modals
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  syncPanelButton() {
+    const open = document.body.classList.contains('panel-open');
+    $('menuBtn').setAttribute('aria-expanded', String(open));
+    $('menuIcon').setAttribute('href', open ? '#i-close' : '#i-menu');
+  }
 
-      if (e.code === 'KeyH') { // H = Toggle HUD for OBS
-        toggleStreamMode();
-      } else if (e.code === 'Space') { // Space = Launch Rocket
-        e.preventDefault();
-        this.particleEngine.launchRocket();
-      } else if (e.code === 'KeyF') { // F = Grand Fireworks Finale
-        this.triggerGrandFinale();
-      } else if (e.code === 'KeyA') { // A = Maha Aarti
-        this.diwaliScene.performMahaAarti();
-        this.showToast("✨ Divine Maha Aarti Ceremony in Motion!");
-      } else if (e.code === 'KeyL') { // L = Sky Lantern
-        this.lanternManager.releaseLantern(null, "Live Stream Devotee");
-        this.showToast("🏮 Sky Lantern Released on Stream!");
-      }
+  closePanelOnSmall() {
+    if (window.innerWidth <= 760) {
+      document.body.classList.remove('panel-open');
+      this.syncPanelButton();
+    }
+  }
+
+  setupPanel() {
+    const camButtons = document.querySelectorAll('.cam-btn');
+    camButtons.forEach((btn) => btn.addEventListener('click', () => {
+      this.setView(btn.dataset.view);
+      this.closePanelOnSmall();
+    }));
+
+    const chips = document.querySelectorAll('.atmo-chip');
+    chips.forEach((chip) => chip.addEventListener('click', () => {
+      chips.forEach((c) => {
+        c.classList.toggle('active', c === chip);
+        c.setAttribute('aria-pressed', String(c === chip));
+      });
+      this.diwaliScene.setAtmosphere(chip.dataset.atmo);
+    }));
+
+    $('laserBtn').addEventListener('click', () => this.toggleLasers());
+    $('streamViewBtn').addEventListener('click', () => this.toggleStreamMode());
+    $('showUiBtn').addEventListener('click', () => this.toggleStreamMode());
+    $('fullscreenBtn').addEventListener('click', () => this.toggleFullscreen());
+  }
+
+  setView(view, instant = false) {
+    const v = VIEWS[view] || VIEWS.orbit;
+    // phones are tall and narrow: pull back so the courtyard still fits
+    const pull = this.camera.aspect < 0.8 ? 1.08 : 1;
+    this.targetCamPos.set(v.pos[0], v.pos[1], v.pos[2]);
+    this.targetLookAt.set(v.look[0], v.look[1], v.look[2]);
+    if (pull !== 1) {
+      const dir = this.targetCamPos.clone().sub(this.targetLookAt).multiplyScalar(pull);
+      this.targetCamPos.copy(this.targetLookAt).add(dir);
+    }
+    document.querySelectorAll('.cam-btn').forEach((b) => {
+      const on = b.dataset.view === view;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', String(on));
     });
+    if (instant || this.reduceMotion) {
+      this.camera.position.copy(this.targetCamPos);
+      this.controls.target.copy(this.targetLookAt);
+      this.isTransitioningCam = false;
+    } else {
+      this.isTransitioningCam = true;
+    }
+  }
 
-    // Wish Reader Popup close
-    document.getElementById('closePopupBtn').addEventListener('click', () => {
-      document.getElementById('wishCardPopup').classList.remove('show');
-    });
+  setupModes() {
+    const tabs = document.querySelectorAll('.mode-tab');
+    tabs.forEach((tab) => tab.addEventListener('click', () => {
+      tabs.forEach((t) => {
+        t.classList.toggle('active', t === tab);
+        t.setAttribute('aria-pressed', String(t === tab));
+      });
+      this.setMode(tab.dataset.mode);
+    }));
   }
 
   setMode(mode) {
     this.currentMode = mode;
-    const subPanels = ['diya', 'sparkler', 'aarti', 'rocket', 'anar', 'chakri', 'lantern'];
-    subPanels.forEach(p => {
-      const el = document.getElementById(`panel-${p}`);
-      if (el) el.style.display = p === mode ? 'flex' : 'none';
-    });
-
-    const isSparkler = mode === 'sparkler';
-    this.particleEngine.setSparklerActive(isSparkler);
-    document.body.classList.toggle('sparkler-cursor', isSparkler);
-
-    const hint = document.getElementById('interactionHint');
-    if (mode === 'diya') {
-      hint.innerHTML = '💡 <span>Click on any unlit clay Diya to ignite it with golden flame!</span>';
-    } else if (mode === 'sparkler') {
-      hint.innerHTML = '💡 <span>Move your pointer to paint with light in the air! Sizzling golden sparks follow your wand!</span>';
-    } else if (mode === 'aarti') {
-      hint.innerHTML = '💡 <span>Click "Perform Maha Aarti" to witness the sacred clockwise circular offering with real Aarti audio!</span>';
-    } else if (mode === 'rocket') {
-      hint.innerHTML = '💡 <span>Click anywhere in the night sky to launch a whistling rocket!</span>';
-    } else if (mode === 'anar') {
-      hint.innerHTML = '💡 <span>Click on the courtyard ground to place & ignite a sparkling Anar!</span>';
-    } else if (mode === 'chakri') {
-      hint.innerHTML = '💡 <span>Click on the courtyard stone terrace to spin a Chakri!</span>';
-    } else if (mode === 'lantern') {
-      hint.innerHTML = '💡 <span>Release wish lanterns, or click any floating sky lantern to read its blessing!</span>';
-    }
+    Object.keys(MODE_HINTS).forEach((m) => { $(`panel-${m}`).hidden = m !== mode; });
+    $('interactionHint').textContent = MODE_HINTS[mode];
+    const sparkler = mode === 'sparkler';
+    this.particleEngine.setSparklerActive(sparkler);
+    document.body.classList.toggle('sparkler-cursor', sparkler);
+    // dragging paints with the sparkler instead of turning the camera
+    this.controls.enableRotate = !sparkler;
   }
 
-  switchCameraView(view) {
-    this.isTransitioningCam = true;
-
-    if (view === 'courtyard') {
-      this.targetCamPos.set(0, 6, 8);
-      this.targetLookAt.set(0, 0.5, -4);
-    } else if (view === 'ghat') {
-      this.targetCamPos.set(0, 4, 18);
-      this.targetLookAt.set(0, -2, 36);
-    } else if (view === 'sky') {
-      this.targetCamPos.set(0, 8, 20);
-      this.targetLookAt.set(0, 45, -20);
-    } else { // orbit
-      this.targetCamPos.set(0, 16, 28);
-      this.targetLookAt.set(0, 2, 0);
-    }
-  }
-
-  setupPointerInteractions() {
-    window.addEventListener('pointerdown', (e) => {
-      if (e.target.closest('.top-nav-hud, .camera-hud, .bottom-action-dock, .sub-toolbar, .modal-overlay, .wish-card-popup')) {
-        return;
-      }
-      this.isPointerDown = true;
-      this.pointerDownPos = { x: e.clientX, y: e.clientY };
+  setupActions() {
+    $('lightAllDiyasBtn').addEventListener('click', () => this.diyaManager.lightAll());
+    $('resetDiyasBtn').addEventListener('click', () => {
+      this.diyaManager.resetAll();
+      this.allLitAnnounced = false;
     });
-
-    let sparklerThrottled = false;
-    window.addEventListener('pointermove', (e) => {
-      this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-      this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-
-      if (this.currentMode === 'sparkler' && !sparklerThrottled) {
-        sparklerThrottled = true;
-        requestAnimationFrame(() => {
-          this.raycaster.setFromCamera(this.mouse, this.camera);
-          const targetPlane = new THREE.Plane().setFromNormalAndCoplanarPoint(
-            this.camera.getWorldDirection(new THREE.Vector3()).negate(),
-            this.controls.target
-          );
-          const intersectPoint = new THREE.Vector3();
-          if (this.raycaster.ray.intersectPlane(targetPlane, intersectPoint)) {
-            this.particleEngine.updateSparklerTip(intersectPoint);
-          }
-          sparklerThrottled = false;
-        });
-      }
-    });
-
-    window.addEventListener('pointerup', (e) => {
-      if (!this.isPointerDown) return;
-      this.isPointerDown = false;
-
-      const dist = Math.hypot(e.clientX - this.pointerDownPos.x, e.clientY - this.pointerDownPos.y);
-      if (dist < 6) {
-        this.handleSceneClick(e);
-      }
-    });
-  }
-
-  handleSceneClick(e) {
-    this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-    this.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-
-    this.raycaster.setFromCamera(this.mouse, this.camera);
-
-    // 0. Check if user clicked on Interactive Sweets (Mithai)
-    const sweetHits = this.raycaster.intersectObjects(this.diwaliScene.sweetMeshes);
-    if (sweetHits.length > 0) {
-      const sweet = sweetHits[0].object;
-      const name = sweet.userData.name || "Diwali Sweet";
+    $('spawnFloatingDiyaBtn').addEventListener('click', () => {
+      this.diyaManager.createFloatingLotusDiya(-24 + Math.random() * 12, 18 + Math.random() * 10);
       audio.playDiyaChime();
-      this.showToast(`🍬 You tasted delicious ${name}! Sharing sweet joy! 🪔`);
-      return;
-    }
+      this.showToast('A lotus diya floats out onto the river.');
+      this.setView('ghat');
+    });
+    $('clearTrailBtn').addEventListener('click', () => this.particleEngine.clearLightTrail());
+    $('performAartiBtn').addEventListener('click', () => this.performAarti());
+    $('soundShankhaBtn').addEventListener('click', () => audio.playShankha());
+    $('barrageRocketsBtn').addEventListener('click', () => {
+      for (let i = 0; i < 3; i++) setTimeout(() => this.particleEngine.launchRocket(), i * 380);
+    });
+    $('multiAnarBtn').addEventListener('click', () => {
+      [[-6, -6], [0, -9], [6, -6]].forEach(([x, z], i) =>
+        setTimeout(() => this.particleEngine.createAnarFountain(new THREE.Vector3(x, 0, z)), i * 300));
+    });
+    $('twinChakriBtn').addEventListener('click', () => {
+      this.particleEngine.createChakriSpinner(new THREE.Vector3(-4, 0, 1));
+      this.particleEngine.createChakriSpinner(new THREE.Vector3(4, 0, 1));
+    });
+    $('openWishModalBtn').addEventListener('click', () => this.openModal('wishModalOverlay'));
 
-    const lanternHits = this.raycaster.intersectObjects(this.lanternManager.lanternMeshesForRaycast);
-    if (lanternHits.length > 0) {
-      const lanternParent = lanternHits[0].object.userData.lanternParent;
-      if (lanternParent) {
-        this.openWishPopup(lanternParent.userData.wish, lanternParent.userData.author);
-        return;
-      }
-    }
+    document.querySelectorAll('.quick-wish-chip').forEach((chip) => chip.addEventListener('click', () => {
+      $('wishInput').value = chip.dataset.text;
+    }));
+    $('releaseLanternBtn').addEventListener('click', () => {
+      const wish = $('wishInput').value.trim() || 'May light always win over darkness.';
+      const author = $('wishAuthor').value.trim() || 'A fellow celebrant';
+      this.lanternManager.releaseLantern(wish, author);
+      audio.playDiyaChime();
+      this.closeModal();
+      $('wishInput').value = '';
+      this.showToast('Your lantern is rising. Tap it any time to read your wish.');
+    });
+    $('closePopupBtn').addEventListener('click', () => this.closeWishPopup());
+  }
 
-    if (this.currentMode === 'diya') {
-      const diyaHits = this.raycaster.intersectObjects(this.diyaManager.diyaMeshesForRaycast);
-      if (diyaHits.length > 0) {
-        const diyaParent = diyaHits[0].object.userData.diyaParent;
-        if (diyaParent && !diyaParent.userData.isLit) {
-          this.diyaManager.igniteDiya(diyaParent, true);
-          this.updateDiyaCounter();
-        }
-      }
-    } else if (this.currentMode === 'rocket') {
-      const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 10);
-      const targetPoint = new THREE.Vector3();
-      this.raycaster.ray.intersectPlane(plane, targetPoint);
-      this.particleEngine.launchRocket(targetPoint);
-    } else if (this.currentMode === 'anar') {
-      const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-      const groundHit = new THREE.Vector3();
-      if (this.raycaster.ray.intersectPlane(groundPlane, groundHit)) {
-        if (Math.abs(groundHit.x) < 16 && groundHit.z < 10) {
-          this.particleEngine.createAnarFountain(groundHit);
-        } else {
-          this.showToast("⚠️ Place Anar on the stone courtyard!");
-        }
-      }
-    } else if (this.currentMode === 'chakri') {
-      const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-      const groundHit = new THREE.Vector3();
-      if (this.raycaster.ray.intersectPlane(groundPlane, groundHit)) {
-        if (Math.abs(groundHit.x) < 16 && groundHit.z < 10) {
-          this.particleEngine.createChakriSpinner(groundHit);
-        } else {
-          this.showToast("⚠️ Place Chakri on the stone courtyard!");
-        }
-      }
-    } else if (this.currentMode === 'lantern') {
-      this.lanternManager.releaseLantern(null, null);
-      this.showToast("🏮 Sky Lantern Released!");
-    } else if (this.currentMode === 'aarti') {
-      this.diwaliScene.performMahaAarti();
+  performAarti() {
+    if (this.diwaliScene.performMahaAarti()) {
+      this.showToast('The aarti begins. The thali circles the rangoli.');
     }
   }
 
-  renderFestivePostcard() {
-    const pCanvas = document.getElementById('postcardCanvas');
-    if (!pCanvas) return;
-    const ctx = pCanvas.getContext('2d');
-    const width = 900;
-    const height = 600;
-    pCanvas.width = width;
-    pCanvas.height = height;
+  // ------------------------------------------------------------------------
+  // Modals
+  // ------------------------------------------------------------------------
+  setupModals() {
+    $('openCinemaBtn').addEventListener('click', () => {
+      this.openModal('cinemaModalOverlay');
+      const video = $('realCinemaVideo');
+      if (!video.getAttribute('src')) video.src = document.querySelector('.channel-pill.active').dataset.src;
+      video.play().catch(() => {});
+    });
+    $('postcardBtn').addEventListener('click', async () => {
+      this.closePanelOnSmall();
+      await this.renderFestivePostcard(true);
+      this.openModal('postcardModalOverlay');
+    });
 
-    // 1. Draw 3D WebGL Snapshot
-    ctx.drawImage(this.renderer.domElement, 0, 0, width, height);
+    [['closeCinemaModalBtn'], ['closeWishModalBtn'], ['closePostcardModalBtn']].forEach(([id]) =>
+      $(id).addEventListener('click', () => this.closeModal()));
+    document.querySelectorAll('.modal-overlay').forEach((ov) => ov.addEventListener('click', (e) => {
+      if (e.target === ov) this.closeModal();
+    }));
 
-    // 2. Warm vignette
-    const grad = ctx.createRadialGradient(width / 2, height / 2, 100, width / 2, height / 2, width * 0.7);
-    grad.addColorStop(0, 'rgba(0, 0, 0, 0.15)');
-    grad.addColorStop(0.7, 'rgba(15, 6, 32, 0.6)');
-    grad.addColorStop(1, 'rgba(8, 3, 18, 0.9)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, width, height);
+    const video = $('realCinemaVideo');
+    const pills = document.querySelectorAll('.channel-pill');
+    pills.forEach((pill) => {
+      pill.addEventListener('click', () => {
+        pills.forEach((p) => {
+          p.classList.toggle('active', p === pill);
+          p.setAttribute('aria-pressed', String(p === pill));
+        });
+        video.src = pill.dataset.src;
+        video.play().catch(() => {});
+      });
+    });
 
-    // 3. Ornate Royal Golden Borders
-    ctx.strokeStyle = '#ffd700';
-    ctx.lineWidth = 4;
-    ctx.strokeRect(20, 20, width - 40, height - 40);
+    ['postcardRecipient', 'postcardSender'].forEach((id) =>
+      $(id).addEventListener('input', () => this.renderFestivePostcard(false)));
+    $('downloadPostcardBtn').addEventListener('click', () => {
+      const link = document.createElement('a');
+      link.download = 'Shubh_Deepavali_Postcard.png';
+      link.href = $('postcardCanvas').toDataURL('image/png');
+      link.click();
+      this.showToast('Postcard saved. Share the light!');
+    });
+  }
 
-    ctx.strokeStyle = '#ffb703';
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(28, 28, width - 56, height - 56);
+  openModal(id) {
+    this.closeModal();
+    const el = $(id);
+    this.lastFocus = document.activeElement;
+    el.classList.add('open');
+    el.setAttribute('aria-hidden', 'false');
+    this.openModalEl = el;
+    const first = el.querySelector('textarea, input, .modal-close');
+    if (first) setTimeout(() => first.focus({ preventScroll: true }), 50);
+  }
 
-    const cornerSize = 40;
-    const drawCorner = (x, y, dx, dy) => {
-      ctx.beginPath();
-      ctx.moveTo(x, y + dy * cornerSize);
-      ctx.lineTo(x, y);
-      ctx.lineTo(x + dx * cornerSize, y);
-      ctx.strokeStyle = '#ffd700';
-      ctx.lineWidth = 4;
-      ctx.stroke();
-
-      ctx.fillStyle = '#ffd700';
-      ctx.beginPath();
-      ctx.arc(x + dx * 10, y + dy * 10, 4, 0, Math.PI * 2);
-      ctx.fill();
-    };
-
-    drawCorner(28, 28, 1, 1);
-    drawCorner(width - 28, 28, -1, 1);
-    drawCorner(28, height - 28, 1, -1);
-    drawCorner(width - 28, height - 28, -1, -1);
-
-    // 4. Header Badge & Title
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#ffb703';
-    ctx.font = 'bold 20px "Yatra One", cursive, sans-serif';
-    ctx.fillText('✨ शुभ दीपावली ✨', width / 2, 75);
-
-    ctx.fillStyle = '#ffd700';
-    ctx.font = '900 42px "Cinzel Decorative", serif';
-    ctx.shadowColor = 'rgba(255, 183, 3, 0.8)';
-    ctx.shadowBlur = 15;
-    ctx.fillText('HAPPY DIWALI', width / 2, 125);
-    ctx.shadowBlur = 0;
-
-    const recipient = document.getElementById('postcardRecipient').value.trim() || "Dear Loved Ones";
-    const sender = document.getElementById('postcardSender').value.trim() || "With Love & Blessings";
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 24px "Outfit", sans-serif';
-    ctx.fillText(`To: ${recipient}`, width / 2, 210);
-
-    ctx.fillStyle = '#f1edfa';
-    ctx.font = 'italic 19px "Outfit", sans-serif';
-    ctx.fillText('May the holy divine lights illuminate your path with boundless joy,', width / 2, 260);
-    ctx.fillText('radiant health, peace of mind, and everlasting prosperity!', width / 2, 290);
-
-    ctx.fillStyle = '#ffd700';
-    ctx.font = '22px serif';
-    ctx.fillText('✦  🪔  ✦', width / 2, 345);
-
-    ctx.fillStyle = '#ffd700';
-    ctx.font = 'bold 22px "Rozha One", serif';
-    ctx.fillText(`— ${sender}`, width / 2, 420);
-
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
-    ctx.font = '13px "Outfit", sans-serif';
-    ctx.fillText('Shubh Deepavali 3D Celebration • The Festival of Lights', width / 2, height - 42);
+  closeModal() {
+    const el = this.openModalEl;
+    if (!el) return;
+    el.classList.remove('open');
+    el.setAttribute('aria-hidden', 'true');
+    if (el.id === 'cinemaModalOverlay') $('realCinemaVideo').pause();
+    this.openModalEl = null;
+    if (this.lastFocus && this.lastFocus.focus) this.lastFocus.focus({ preventScroll: true });
   }
 
   openWishPopup(wish, author) {
-    document.getElementById('popupWishText').textContent = `"${wish}"`;
-    document.getElementById('popupWishAuthor').textContent = `— ${author}`;
-    document.getElementById('wishCardPopup').classList.add('show');
+    $('popupWishText').textContent = `“${wish}”`;
+    $('popupWishAuthor').textContent = `— ${author}`;
+    const pop = $('wishCardPopup');
+    pop.classList.add('show');
+    pop.setAttribute('aria-hidden', 'false');
     audio.playDiyaChime();
   }
 
+  closeWishPopup() {
+    const pop = $('wishCardPopup');
+    pop.classList.remove('show');
+    pop.setAttribute('aria-hidden', 'true');
+  }
+
+  // ------------------------------------------------------------------------
+  // Pointer & keyboard
+  // ------------------------------------------------------------------------
+  setPointerFromEvent(e) {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    this.pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    this.pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  }
+
+  setupPointer() {
+    const canvas = this.renderer.domElement;
+    canvas.addEventListener('pointerdown', (e) => {
+      this.pointerDown = { x: e.clientX, y: e.clientY, t: performance.now() };
+      if (this.currentMode === 'sparkler') this.moveSparkler(e);
+    });
+
+    let pending = null;
+    canvas.addEventListener('pointermove', (e) => {
+      if (this.currentMode !== 'sparkler') return;
+      if (e.pointerType !== 'mouse' && !this.pointerDown) return;
+      pending = e;
+      if (this.sparkFrame) return;
+      this.sparkFrame = requestAnimationFrame(() => {
+        this.sparkFrame = null;
+        if (pending) this.moveSparkler(pending);
+      });
+    });
+
+    const up = (e) => {
+      const down = this.pointerDown;
+      this.pointerDown = null;
+      if (!down) return;
+      const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
+      if (moved < 8 && performance.now() - down.t < 600) this.handleSceneClick(e);
+    };
+    canvas.addEventListener('pointerup', up);
+    canvas.addEventListener('pointercancel', () => { this.pointerDown = null; });
+  }
+
+  moveSparkler(e) {
+    this.setPointerFromEvent(e);
+    this.raycaster.setFromCamera(this.pointer, this.camera);
+    // paint on a plane facing the camera, a few metres in front of the target
+    const normal = this.camera.getWorldDirection(new THREE.Vector3()).negate();
+    const anchor = this.controls.target.clone().addScaledVector(normal, 2);
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, anchor);
+    const hit = new THREE.Vector3();
+    if (this.raycaster.ray.intersectPlane(plane, hit)) {
+      hit.y = Math.max(0.3, hit.y);
+      this.particleEngine.updateSparklerTip(hit);
+    }
+  }
+
+  groundHit() {
+    const hit = new THREE.Vector3();
+    const ok = this.raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit);
+    if (!ok || Math.abs(hit.x) > 17 || hit.z < -16.5 || hit.z > 8.8) return null;
+    return hit;
+  }
+
+  handleSceneClick(e) {
+    this.setPointerFromEvent(e);
+    this.raycaster.setFromCamera(this.pointer, this.camera);
+
+    const lanternHit = this.raycaster.intersectObjects(this.lanternManager.lanternMeshesForRaycast, false)[0];
+    if (lanternHit) {
+      const l = lanternHit.object.userData.lanternParent;
+      this.openWishPopup(l.userData.wish, l.userData.author);
+      return;
+    }
+
+    const sweetHit = this.raycaster.intersectObjects(this.diwaliScene.sweetMeshes, false)[0];
+    if (sweetHit) {
+      audio.playDiyaChime();
+      this.showToast(`Mmm, ${sweetHit.object.userData.name}. Happy Diwali!`);
+      return;
+    }
+
+    switch (this.currentMode) {
+      case 'diya': {
+        const hit = this.raycaster.intersectObjects(this.diyaManager.diyaMeshesForRaycast, false)[0];
+        if (hit) {
+          const diya = hit.object.userData.diyaParent;
+          if (diya && !diya.userData.isLit) this.diyaManager.igniteDiya(diya, true);
+        }
+        break;
+      }
+      case 'rocket': {
+        const hit = new THREE.Vector3();
+        const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 12); // z = -12, behind the courtyard
+        if (this.raycaster.ray.intersectPlane(plane, hit)) {
+          hit.x = THREE.MathUtils.clamp(hit.x, -30, 30);
+          this.particleEngine.launchRocket(hit);
+        } else {
+          this.particleEngine.launchRocket();
+        }
+        break;
+      }
+      case 'anar': {
+        const g = this.groundHit();
+        if (g) this.particleEngine.createAnarFountain(g);
+        else this.showToast('Place the anar on the courtyard floor.');
+        break;
+      }
+      case 'chakri': {
+        const g = this.groundHit();
+        if (g) this.particleEngine.createChakriSpinner(g);
+        else this.showToast('Place the chakri on the courtyard floor.');
+        break;
+      }
+      case 'lantern': {
+        const g = this.groundHit();
+        this.lanternManager.releaseLantern(null, null, g ? new THREE.Vector3(g.x, 1.2, g.z) : null);
+        break;
+      }
+      case 'aarti':
+        this.performAarti();
+        break;
+      default:
+        break;
+    }
+  }
+
+  setupKeyboard() {
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        if (this.openModalEl) this.closeModal();
+        else if ($('wishCardPopup').classList.contains('show')) this.closeWishPopup();
+        else if (document.body.classList.contains('clean-stream-view')) this.toggleStreamMode();
+        else if (document.body.classList.contains('panel-open')) {
+          document.body.classList.remove('panel-open');
+          this.syncPanelButton();
+        }
+        return;
+      }
+      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (!this.started || this.openModalEl) return;
+      const t = e.target;
+      if (t.closest && t.closest('input, textarea, select, [contenteditable]')) return;
+      // let Space/Enter press the focused button instead of firing a hotkey
+      if ((e.code === 'Space' || e.code === 'Enter') && t.closest && t.closest('button, a')) return;
+
+      switch (e.code) {
+        case 'KeyH': this.toggleStreamMode(); break;
+        case 'Space': e.preventDefault(); this.triggerGrandFinale(); break;
+        case 'KeyR': this.particleEngine.launchRocket(); break;
+        case 'KeyA': this.performAarti(); break;
+        case 'KeyW': this.lanternManager.releaseLantern(null, null); break;
+        case 'KeyL': this.toggleLasers(); break;
+        case 'KeyF': this.toggleFullscreen(); break;
+        default: break;
+      }
+    });
+  }
+
+  toggleStreamMode() {
+    const on = document.body.classList.toggle('clean-stream-view');
+    this.closePanelOnSmall();
+    if (on) this.showToast('Controls hidden. Press H or Esc to bring them back.');
+  }
+
+  toggleLasers() {
+    const on = this.diwaliScene.toggleLaserShow();
+    $('laserBtn').setAttribute('aria-pressed', String(on));
+  }
+
+  toggleFullscreen() {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {});
+    else document.exitFullscreen?.();
+  }
+
+  // ------------------------------------------------------------------------
+  // Postcard: the live view, cropped (not stretched) into a 3:2 card
+  // ------------------------------------------------------------------------
+  async renderFestivePostcard(capture) {
+    const canvas = $('postcardCanvas');
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+
+    if (capture || !this.snapshot) {
+      // render now and copy before the browser clears the drawing buffer
+      this.diwaliScene.render();
+      const src = this.renderer.domElement;
+      const snap = document.createElement('canvas');
+      snap.width = W; snap.height = H;
+      const s = Math.max(W / src.width, H / src.height);
+      const sw = W / s, sh = H / s;
+      snap.getContext('2d').drawImage(src, (src.width - sw) / 2, (src.height - sh) / 2, sw, sh, 0, 0, W, H);
+      this.snapshot = snap;
+    }
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+
+    ctx.drawImage(this.snapshot, 0, 0);
+
+    const shade = ctx.createLinearGradient(0, 0, 0, H);
+    shade.addColorStop(0, 'rgba(10,5,2,0.55)');
+    shade.addColorStop(0.35, 'rgba(10,5,2,0.05)');
+    shade.addColorStop(0.62, 'rgba(10,5,2,0.15)');
+    shade.addColorStop(1, 'rgba(10,5,2,0.88)');
+    ctx.fillStyle = shade;
+    ctx.fillRect(0, 0, W, H);
+
+    // thin brass frame
+    ctx.strokeStyle = 'rgba(255,214,140,0.75)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(28, 28, W - 56, H - 56);
+    ctx.strokeStyle = 'rgba(255,214,140,0.3)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(38, 38, W - 76, H - 76);
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#f5b54a';
+    ctx.font = '34px "Tiro Devanagari Hindi", serif';
+    ctx.fillText('शुभ दीपावली', W / 2, 110);
+
+    const recipient = $('postcardRecipient').value.trim() || 'Dear loved ones';
+    const sender = $('postcardSender').value.trim() || 'With love and blessings';
+
+    ctx.fillStyle = 'rgba(251,239,217,0.85)';
+    ctx.font = 'italic 500 34px "Cormorant Garamond", serif';
+    ctx.fillText(`To ${recipient},`, W / 2, H - 230);
+
+    const grad = ctx.createLinearGradient(0, H - 200, 0, H - 120);
+    grad.addColorStop(0, '#fff3da');
+    grad.addColorStop(1, '#f2b65e');
+    ctx.fillStyle = grad;
+    ctx.shadowColor = 'rgba(255,150,50,0.55)';
+    ctx.shadowBlur = 28;
+    ctx.font = '600 96px "Cormorant Garamond", serif';
+    ctx.fillText('Happy Diwali', W / 2, H - 140);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = 'rgba(251,239,217,0.8)';
+    ctx.font = '500 22px "Manrope", sans-serif';
+    ctx.fillText('May the lamps light your home with health, joy and prosperity.', W / 2, H - 95);
+    ctx.fillStyle = '#ffd88a';
+    ctx.font = 'italic 600 30px "Cormorant Garamond", serif';
+    ctx.fillText(`— ${sender}`, W / 2, H - 56);
+  }
+
   updateDiyaCounter() {
+    if (!this.diyaManager) return;
     const lit = this.diyaManager.getLitCount();
     const total = this.diyaManager.getTotalCount();
-    const display = document.getElementById('diyaCounterDisplay');
-    if (display) {
-      display.textContent = `${lit} / ${total} Lit`;
-      if (lit === total) {
-        display.textContent = `${lit} / ${total} Lit ✨ Courtyard Blessed!`;
-      }
+    $('diyaCounterDisplay').textContent = `${lit} / ${total}`;
+    if (lit === total && !this.allLitAnnounced && this.started) {
+      this.allLitAnnounced = true;
+      this.showToast('Every diya is lit. The courtyard glows!');
     }
   }
 
   triggerGrandFinale() {
-    this.showToast("🎆 SPECTACULAR DIWALI GRAND FINALE & AYODHYA LASER SHOW! 🪔✨");
+    if (this.finaleRunning) return;
+    this.finaleRunning = true;
+    setTimeout(() => { this.finaleRunning = false; }, 6000);
+    this.showToast('Grand finale!');
     audio.playShankha();
-
-    // Activate Ayodhya Volumetric Laser Beams
-    if (this.diwaliScene && this.diwaliScene.triggerLaserShow) {
-      this.diwaliScene.triggerLaserShow(8500);
-    }
-
-    this.switchCameraView('sky');
-    const skyBtn = document.querySelector('.cam-btn[data-view="sky"]');
-    if (skyBtn) {
-      document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
-      skyBtn.classList.add('active');
-    }
-
+    this.diwaliScene.triggerLaserShow(9000);
+    this.setView('sky');
     this.diyaManager.lightAll();
-    this.updateDiyaCounter();
 
-    const rocketTotal = 14;
-    for (let i = 0; i < rocketTotal; i++) {
+    for (let i = 0; i < 16; i++) {
       setTimeout(() => {
-        const offset = new THREE.Vector3((Math.random() - 0.5) * 24, 0, (Math.random() - 0.5) * 20);
-        this.particleEngine.launchRocket(offset);
-      }, i * 280);
+        const p = new THREE.Vector3((Math.random() - 0.5) * 30, 0, -14 + (Math.random() - 0.5) * 12);
+        this.particleEngine.launchRocket(p, { silent: i % 2 === 1 });
+      }, i * 260);
     }
-
     setTimeout(() => {
-      this.particleEngine.createAnarFountain(new THREE.Vector3(-6, 0, -4));
-      this.particleEngine.createAnarFountain(new THREE.Vector3(6, 0, -4));
-    }, 1200);
-
-    for (let j = 0; j < 6; j++) {
-      setTimeout(() => {
-        this.lanternManager.releaseLantern("Universal Peace, Radiance & Prosperity! ✨", "Auspicious Devotee");
-      }, 1500 + j * 400);
+      this.particleEngine.createAnarFountain(new THREE.Vector3(-7, 0, -8));
+      this.particleEngine.createAnarFountain(new THREE.Vector3(7, 0, -8));
+    }, 900);
+    for (let j = 0; j < 5; j++) {
+      setTimeout(() => this.lanternManager.releaseLantern('Peace, light and prosperity to all.', 'The grand finale'), 1500 + j * 450);
     }
   }
 
   showToast(message) {
-    const toast = document.getElementById('toastNotice');
-    if (!toast) return;
+    const toast = $('toastNotice');
     toast.textContent = message;
     toast.classList.add('show');
     clearTimeout(this.toastTimeout);
-    this.toastTimeout = setTimeout(() => {
-      toast.classList.remove('show');
-    }, 3200);
+    this.toastTimeout = setTimeout(() => toast.classList.remove('show'), 3200);
   }
 
-  animate() {
-    requestAnimationFrame(this.animate);
-
-    const delta = Math.min(this.clock.getDelta(), 0.1);
-    const elapsedTime = this.clock.getElapsedTime();
+  // ------------------------------------------------------------------------
+  animate(timestamp) {
+    this.timer.update(timestamp);
+    const delta = Math.min(this.timer.getDelta(), 0.05);
+    const time = this.timer.getElapsed();
 
     if (this.isTransitioningCam) {
-      this.camera.position.lerp(this.targetCamPos, 0.05);
-      this.controls.target.lerp(this.targetLookAt, 0.05);
-      if (this.camera.position.distanceTo(this.targetCamPos) < 0.2) {
-        this.isTransitioningCam = false;
-      }
+      const k = 1 - Math.exp(-delta * 2.6);
+      this.camera.position.lerp(this.targetCamPos, k);
+      this.controls.target.lerp(this.targetLookAt, k);
+      if (this.camera.position.distanceTo(this.targetCamPos) < 0.05) this.isTransitioningCam = false;
     }
-
     this.controls.update();
 
-    // Update Subsystems
-    this.diwaliScene.update(delta);
-    this.particleEngine.update(delta);
-    this.diyaManager.update(delta, elapsedTime);
-    this.lanternManager.update(delta, elapsedTime);
+    // distant neighbourhood fireworks keep the night alive (silent, far away)
+    if (this.started && !this.reduceMotion && time > this.nextAmbient && !document.hidden) {
+      this.nextAmbient = time + 4 + Math.random() * 6;
+      this.particleEngine.launchRocket(new THREE.Vector3((Math.random() - 0.5) * 140, 0, -70 - Math.random() * 40), { silent: true, far: true });
+    }
 
-    // Render Scene
-    this.renderer.render(this.scene, this.camera);
+    this.diwaliScene.update(delta, time);
+    this.particleEngine.update(delta);
+    this.diyaManager.update(delta, time);
+    this.lanternManager.update(delta, time);
+    this.diwaliScene.render();
   }
 }
 
-// Instantiate on DOM load
 window.addEventListener('DOMContentLoaded', () => {
-  new DiwaliApp();
+  window.diwaliApp = new DiwaliApp();
 });

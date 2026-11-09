@@ -12,9 +12,9 @@ class DiwaliAudioEngine {
 
     // Real audio track library
     this.tracks = {
-      aarti: '/audio/real_aarti.ogg',
-      flute: '/audio/real_flute.ogg',
-      sitar: '/audio/real_sitar.ogg'
+      aarti: `${import.meta.env.BASE_URL}audio/real_aarti.ogg`,
+      flute: `${import.meta.env.BASE_URL}audio/real_flute.ogg`,
+      sitar: `${import.meta.env.BASE_URL}audio/real_sitar.ogg`
     };
 
     // Web Audio Context for crisp instant responsive SFX
@@ -101,10 +101,28 @@ class DiwaliAudioEngine {
     osc.stop(now + 0.9);
   }
 
-  playFireworkBurst() {
+  // Short crackle pop for glitter shells
+  playCrackle() {
+    if (!this.soundEnabled || !this.ctx) return;
+    const now = this.ctx.currentTime;
+    const len = Math.floor(this.ctx.sampleRate * 0.05);
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    const g = this.ctx.createGain();
+    g.gain.value = 0.25;
+    src.connect(g);
+    g.connect(this.sfxGain);
+    src.start(now);
+  }
+
+  // delay = seconds, so distant shells boom after the flash, like real ones
+  playFireworkBurst(delay = 0) {
     if (!this.soundEnabled) return;
     this.ensureContext();
-    const now = this.ctx.currentTime;
+    const now = this.ctx.currentTime + delay;
 
     const subOsc = this.ctx.createOscillator();
     const subGain = this.ctx.createGain();
@@ -259,13 +277,13 @@ class DiwaliAudioEngine {
   stopSparklerSound() {
     if (!this.sparklerNode || !this.ctx) return;
     try {
+      // detach immediately so a quick re-start isn't swallowed by the old node
+      const node = this.sparklerNode;
+      this.sparklerNode = null;
       this.sparklerGain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + 0.1);
       setTimeout(() => {
-        if (this.sparklerNode) {
-          this.sparklerNode.stop();
-          this.sparklerNode.disconnect();
-          this.sparklerNode = null;
-        }
+        node.stop();
+        node.disconnect();
       }, 120);
     } catch (e) {
       this.sparklerNode = null;

@@ -2,318 +2,264 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Shubh Deepavali 3D ✨ Real Celebration Hub</title>
-  <meta name="description" content="An ultra-bright, interactive 3D Diwali celebration featuring real authentic Aarti and flute audios, real festive videos, interactive Diya lighting, light-painting sparklers, and 3D fireworks.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#120b08">
+  <title>Shubh Deepavali 3D</title>
+  <meta name="description" content="An interactive 3D Diwali night: light clay diyas, paint with a phuljhadi, perform the aarti, launch fireworks and release wish lanterns over a river ghat.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Outfit:wght@300;400;600;700;800&family=Rozha+One&family=Yatra+One&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Manrope:wght@400;500;600;700&family=Tiro+Devanagari+Hindi&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
-  <!-- 3D WebGL Canvas Container -->
-  <div id="canvas-container"></div>
+<body class="is-intro">
+  <!-- Icon sprite -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-diya" viewBox="0 0 24 24"><path d="M3 13.5h15.5l2.5-1.5c-.6 3.6-4.2 6.5-9 6.5s-8.4-2.4-9-5z"/><path d="M17 10.6c-1.4-1.2-1.3-3.1.2-5.1 1.3 1.8 1.4 3.8-.2 5.1z"/></symbol>
+      <symbol id="i-sparkler" viewBox="0 0 24 24"><path d="M4 20l9-9"/><path d="M15 9l1.2-3M15 9l3-1.2M15 9l2.6 2.6M15 9l-1-3.2M15 9l3.4.4M15 9l.5 3.4"/></symbol>
+      <symbol id="i-aarti" viewBox="0 0 24 24"><ellipse cx="12" cy="15.5" rx="9" ry="3"/><path d="M7 12.2c-.9-.8-.8-2 .1-3.2.8 1.1.9 2.4-.1 3.2zM12 11c-1-1-.9-2.4.1-3.8.9 1.3 1 2.8-.1 3.8zM17 12.2c-.9-.8-.8-2 .1-3.2.8 1.1.9 2.4-.1 3.2z"/></symbol>
+      <symbol id="i-rocket" viewBox="0 0 24 24"><path d="M12 3c2.5 2.2 3.5 5 3.5 8.5V16h-7v-4.5C8.5 8 9.5 5.2 12 3z"/><path d="M8.5 13l-2.5 3v2h2.5M15.5 13l2.5 3v2h-2.5M12 16v5"/></symbol>
+      <symbol id="i-anar" viewBox="0 0 24 24"><path d="M8 21h8l-1.6-7.5h-4.8z"/><path d="M12 11V4M12 11l-3.5-5M12 11l3.5-5M12 11l-5.5-2M12 11l5.5-2"/></symbol>
+      <symbol id="i-chakri" viewBox="0 0 24 24"><path d="M12 12.5c.8 0 1.2-.7.9-1.4-.5-1-2.2-1-2.9.2-1 1.6.3 3.7 2.2 3.8 2.6.1 4.3-2.6 3.3-5-1.2-3-5-3.8-7.4-1.6-2.7 2.5-1.8 7.2 1.7 8.6"/><path d="M19.5 6.5l1.5-1.5M20 10.5h2"/></symbol>
+      <symbol id="i-lantern" viewBox="0 0 24 24"><path d="M7.5 5.5h9l1 9c-.4 2-2.7 3.2-5.5 3.2S6.9 16.5 6.5 14.5z"/><path d="M9.5 18v2.5h5V18M12 9.5c-.8.8-.8 2 0 2.8.8-.8.8-2 0-2.8z"/></symbol>
+      <symbol id="i-orbit" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><ellipse cx="12" cy="12" rx="9.5" ry="4" transform="rotate(-20 12 12)"/></symbol>
+      <symbol id="i-courtyard" viewBox="0 0 24 24"><path d="M3 19l3.5-9h11L21 19z"/><path d="M8.5 19l1.2-9M15.5 19l-1.2-9M4.5 15h15"/></symbol>
+      <symbol id="i-water" viewBox="0 0 24 24"><path d="M3 9c1.5-1.3 3-1.3 4.5 0s3 1.3 4.5 0 3-1.3 4.5 0 3 1.3 4.5 0M3 14c1.5-1.3 3-1.3 4.5 0s3 1.3 4.5 0 3-1.3 4.5 0 3 1.3 4.5 0M3 19c1.5-1.3 3-1.3 4.5 0s3 1.3 4.5 0 3-1.3 4.5 0 3 1.3 4.5 0"/></symbol>
+      <symbol id="i-sky" viewBox="0 0 24 24"><path d="M14.5 4.5a7 7 0 1 0 5 11.5 6 6 0 0 1-5-11.5z"/><path d="M6 4v3M4.5 5.5h3"/></symbol>
+      <symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9.5v5l4.5-2.5z"/></symbol>
+      <symbol id="i-card" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M21 16l-5-5-8 8"/></symbol>
+      <symbol id="i-broadcast" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M8 8a5.5 5.5 0 0 0 0 8M16 8a5.5 5.5 0 0 1 0 8M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14"/></symbol>
+      <symbol id="i-laser" viewBox="0 0 24 24"><path d="M12 21L6 3M12 21l6-18M12 21V3"/></symbol>
+      <symbol id="i-expand" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
+      <symbol id="i-image" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+      <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></symbol>
+      <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></symbol>
+      <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+      <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></symbol>
+      <symbol id="i-mute" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></symbol>
+      <symbol id="i-finale" viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8"/><circle cx="12" cy="12" r="1.6"/></symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+    </defs>
+  </svg>
 
-  <!-- Decorative Hanging Toran & Fairy Lights at Top -->
-  <div class="toran-header">
-    <div class="fairy-lights" id="fairyLights"></div>
-    <div class="toran-leaves">
-      <span>🍃</span><span>🌼</span><span>🍃</span><span>🌸</span>
-      <span>🍃</span><span>🌼</span><span>🍃</span><span>🌸</span>
-      <span>🍃</span><span>🌼</span><span>🍃</span><span>🌸</span>
-      <span>🍃</span><span>🌼</span><span>🍃</span><span>🌸</span>
-      <span>🍃</span><span>🌼</span><span>🍃</span><span>🌸</span>
+  <div id="canvas-container"></div>
+  <div class="vignette" aria-hidden="true"></div>
+
+  <!-- Welcome -->
+  <div class="intro" id="intro" role="dialog" aria-modal="true" aria-labelledby="introTitle">
+    <div class="intro-card">
+      <p class="intro-kicker" lang="hi">शुभ दीपावली</p>
+      <h1 id="introTitle">Shubh Deepavali</h1>
+      <p class="intro-text">Step into a lamp-lit courtyard above the river. Light the diyas, write with a phuljhadi, perform the aarti and fill the sky with fireworks.</p>
+      <div class="intro-actions">
+        <button class="btn btn-primary" id="enterWithMusic" type="button">Enter with music</button>
+        <button class="btn btn-ghost" id="enterQuiet" type="button">Enter quietly</button>
+      </div>
+      <p class="intro-foot">Best with sound on</p>
     </div>
   </div>
 
-  <!-- Top Festive Header & Real Audio / Video Bar -->
-  <header class="top-nav-hud">
-    <div class="logo-area">
-      <div style="display:flex; align-items:center; gap:8px;">
-        <span class="brand-badge">✨ शुभ दीपावली • FESTIVAL OF LIGHTS ✨</span>
-        <span class="streamer-badge" title="100% Royalty Free & Safe for Live Streaming (No Content ID Claims)">🟢 Streamer Safe</span>
+  <!-- Top bar -->
+  <header class="topbar hud">
+    <div class="brand">
+      <svg class="brand-mark" aria-hidden="true"><use href="#i-diya"/></svg>
+      <div class="brand-text">
+        <span class="brand-hi" lang="hi">शुभ दीपावली</span>
+        <span class="brand-en">Shubh Deepavali</span>
       </div>
-      <h1 class="brand-title">SHUBH DEEPAVALI <span class="dim3d">3D</span></h1>
     </div>
 
-    <!-- Sky Atmosphere Selector -->
-    <div class="atmosphere-picker">
-      <span class="atmo-label">Sky Mood:</span>
-      <button class="atmo-chip active" data-atmo="midnight" title="Radiant Midnight Starlight">🌌 Midnight</button>
-      <button class="atmo-chip" data-atmo="twilight" title="Sandhya Sunset Twilight">🌇 Twilight</button>
-      <button class="atmo-chip" data-atmo="golden" title="Sacred Golden Deepotsav Radiance">🪔 Golden</button>
-    </div>
-
-    <div class="global-actions">
-      <!-- Real Video Cinema Modal Trigger -->
-      <button id="openCinemaBtn" class="hud-pill-btn cinema-btn" title="Watch Actual Real Diwali Fireworks & Deepotsav Videos">
-        <span class="icon">🎬</span>
-        <span class="label">Real Videos</span>
-      </button>
-
-      <!-- Real Audio Jukebox Dropdown & Play -->
-      <div class="real-audio-dock">
-        <button id="playRealMusicBtn" class="hud-pill-btn audio-play-btn" title="Play Authentic Temple Aarti / Flute">
-          <span class="icon" id="musicPlayIcon">▶️</span>
-          <span class="label" id="musicPlayLabel">Play Real Music</span>
+    <div class="topbar-actions">
+      <div class="music" role="group" aria-label="Music">
+        <button id="playRealMusicBtn" class="icon-btn" type="button" aria-label="Play music">
+          <svg aria-hidden="true"><use id="musicIcon" href="#i-play"/></svg>
         </button>
-        <select id="realTrackSelector" class="track-select" title="Choose Real Audio Track">
-          <option value="aarti">🪔 Real Temple Aarti</option>
-          <option value="flute">🎶 Real Bansuri Flute</option>
-          <option value="sitar">🪕 Real Classical Sitar</option>
+        <label class="sr-only" for="realTrackSelector">Music track</label>
+        <select id="realTrackSelector" class="track-select">
+          <option value="aarti">Temple aarti</option>
+          <option value="flute">Bansuri flute</option>
+          <option value="sitar">Classical sitar</option>
         </select>
       </div>
-
-      <!-- Stream Mode / Clean OBS View Toggle -->
-      <button id="streamViewBtn" class="hud-pill-btn stream-pill-btn" title="Toggle Clean Cinematic View for Live Stream / OBS (Hotkey: H)">
-        <span class="icon">📺</span>
-        <span class="label">OBS Mode</span>
+      <button id="soundBtn" class="icon-btn" type="button" aria-pressed="true" aria-label="Sound effects on">
+        <svg aria-hidden="true"><use id="soundIcon" href="#i-sound"/></svg>
       </button>
-
-      <!-- Postcard Photo Booth -->
-      <button id="postcardBtn" class="hud-pill-btn postcard-pill-btn" title="Capture 3D Scene into a Customized Greeting Card">
-        <span class="icon">📸</span>
-        <span class="label">Postcard</span>
+      <button id="megaFinaleBtn" class="btn btn-primary finale-btn" type="button">
+        <svg aria-hidden="true"><use href="#i-finale"/></svg>
+        <span>Grand finale</span>
       </button>
-
-      <!-- Mega Fireworks Finale -->
-      <button id="megaFinaleBtn" class="hud-pill-btn grand-firework-btn pulse-glow" title="Burst a Spectacular Grand Diwali Finale">
-        <span class="icon">🎆</span>
-        <span class="label">Grand Finale!</span>
+      <button id="menuBtn" class="icon-btn" type="button" aria-expanded="false" aria-controls="scenePanel" aria-label="Scene settings">
+        <svg aria-hidden="true"><use id="menuIcon" href="#i-menu"/></svg>
       </button>
-
-      <!-- Blender 3D HD Render Download / View -->
-      <a href="/diwali_render.png" target="_blank" class="hud-pill-btn blender-pill-btn" title="View & Download 1080p Cinematic 3D Render generated in Blender" style="text-decoration:none;">
-        <span class="icon">🎨</span>
-        <span class="label">Blender 1080p</span>
-      </a>
     </div>
   </header>
 
-  <!-- Camera Viewpoint Selector (Floating Left) -->
-  <aside class="camera-hud">
-    <div class="camera-label">🎥 Camera View</div>
-    <div class="camera-buttons">
-      <button class="cam-btn active" data-view="orbit" title="Freely orbit & explore in 3D">
-        <span class="cam-icon">🌐</span>
-        <span>Free Orbit</span>
-      </button>
-      <button class="cam-btn" data-view="courtyard" title="Courtyard & Diya close-up">
-        <span class="cam-icon">🪔</span>
-        <span>Courtyard</span>
-      </button>
-      <button class="cam-btn" data-view="ghat" title="Sacred water ghat view">
-        <span class="cam-icon">🌊</span>
-        <span>Water Ghat</span>
-      </button>
-      <button class="cam-btn" data-view="sky" title="Panoramic night sky view">
-        <span class="cam-icon">🌌</span>
-        <span>Night Sky</span>
-      </button>
-    </div>
+  <!-- Scene settings -->
+  <aside class="scene-panel hud" id="scenePanel" aria-label="Scene settings">
+    <section>
+      <h2>View</h2>
+      <div class="view-grid">
+        <button class="cam-btn active" type="button" data-view="orbit" aria-pressed="true"><svg aria-hidden="true"><use href="#i-orbit"/></svg>Free orbit</button>
+        <button class="cam-btn" type="button" data-view="courtyard" aria-pressed="false"><svg aria-hidden="true"><use href="#i-courtyard"/></svg>Courtyard</button>
+        <button class="cam-btn" type="button" data-view="ghat" aria-pressed="false"><svg aria-hidden="true"><use href="#i-water"/></svg>River</button>
+        <button class="cam-btn" type="button" data-view="sky" aria-pressed="false"><svg aria-hidden="true"><use href="#i-sky"/></svg>Night sky</button>
+      </div>
+    </section>
+    <section>
+      <h2>Sky</h2>
+      <div class="segmented" role="group" aria-label="Sky mood">
+        <button class="atmo-chip active" type="button" data-atmo="midnight" aria-pressed="true">Midnight</button>
+        <button class="atmo-chip" type="button" data-atmo="twilight" aria-pressed="false">Twilight</button>
+        <button class="atmo-chip" type="button" data-atmo="golden" aria-pressed="false">Golden</button>
+      </div>
+    </section>
+    <section class="mobile-only">
+      <h2><label for="trackSelectPanel">Music</label></h2>
+      <select id="trackSelectPanel" class="track-select panel-select">
+        <option value="aarti">Temple aarti</option>
+        <option value="flute">Bansuri flute</option>
+        <option value="sitar">Classical sitar</option>
+      </select>
+    </section>
+    <section>
+      <h2>Extras</h2>
+      <div class="extras">
+        <button id="openCinemaBtn" class="extra-btn" type="button"><svg aria-hidden="true"><use href="#i-film"/></svg>Real fireworks videos</button>
+        <button id="postcardBtn" class="extra-btn" type="button"><svg aria-hidden="true"><use href="#i-card"/></svg>Make a postcard</button>
+        <button id="laserBtn" class="extra-btn" type="button" aria-pressed="false"><svg aria-hidden="true"><use href="#i-laser"/></svg>Laser show</button>
+        <button id="streamViewBtn" class="extra-btn" type="button"><svg aria-hidden="true"><use href="#i-broadcast"/></svg>Stream mode (hide controls)</button>
+        <button id="fullscreenBtn" class="extra-btn" type="button"><svg aria-hidden="true"><use href="#i-expand"/></svg>Full screen</button>
+        <a class="extra-btn" href="diwali_render.png" target="_blank" rel="noopener"><svg aria-hidden="true"><use href="#i-image"/></svg>Blender 1080p render</a>
+      </div>
+    </section>
+    <p class="keys"><kbd>Space</kbd> finale <kbd>R</kbd> rocket <kbd>A</kbd> aarti <kbd>W</kbd> lantern <kbd>L</kbd> lasers <kbd>H</kbd> hide UI <kbd>F</kbd> full screen</p>
   </aside>
 
-  <!-- Interactive Action Modes HUD (Bottom Center) -->
-  <nav class="bottom-action-dock">
-    <button class="mode-tab active" data-mode="diya">
-      <span class="mode-icon">🪔</span>
-      <span class="mode-title">Light Diyas</span>
-      <span class="mode-desc">Click unlit diyas</span>
-    </button>
-    <button class="mode-tab" data-mode="sparkler">
-      <span class="mode-icon">🪄</span>
-      <span class="mode-title">Phuljhadi</span>
-      <span class="mode-desc">3D Light Painting</span>
-    </button>
-    <button class="mode-tab" data-mode="aarti">
-      <span class="mode-icon">🕯️</span>
-      <span class="mode-title">Maha Aarti</span>
-      <span class="mode-desc">Holy Brass Thali</span>
-    </button>
-    <button class="mode-tab" data-mode="rocket">
-      <span class="mode-icon">🚀</span>
-      <span class="mode-title">Sky Rocket</span>
-      <span class="mode-desc">Click sky to launch</span>
-    </button>
-    <button class="mode-tab" data-mode="anar">
-      <span class="mode-icon">🌋</span>
-      <span class="mode-title">Anar Fountain</span>
-      <span class="mode-desc">Spark flowerpot</span>
-    </button>
-    <button class="mode-tab" data-mode="chakri">
-      <span class="mode-icon">🌀</span>
-      <span class="mode-title">Chakri</span>
-      <span class="mode-desc">Ground spinner</span>
-    </button>
-    <button class="mode-tab" data-mode="lantern">
-      <span class="mode-icon">🏮</span>
-      <span class="mode-title">Wish Lantern</span>
-      <span class="mode-desc">Send wish to stars</span>
-    </button>
-  </nav>
-
-  <!-- Mode Specific Action Sub-Toolbar -->
-  <div class="sub-toolbar" id="subToolbar">
-    <!-- Diya Mode Controls -->
-    <div class="sub-panel" id="panel-diya">
-      <div class="diya-stats">
-        <span>Courtyard Diyas: </span>
-        <strong id="diyaCounterDisplay">0 / 14 Lit</strong>
+  <!-- Bottom dock -->
+  <div class="dock hud">
+    <div class="context" id="subToolbar">
+      <p class="context-hint" id="interactionHint" aria-live="polite">Tap an unlit diya to light it.</p>
+      <div class="context-actions">
+        <div class="sub-panel" id="panel-diya">
+          <span class="counter"><strong id="diyaCounterDisplay">1 / 14</strong> lit</span>
+          <button id="lightAllDiyasBtn" class="btn btn-primary btn-sm" type="button">Light all</button>
+          <button id="resetDiyasBtn" class="btn btn-ghost btn-sm" type="button">Snuff out</button>
+          <button id="spawnFloatingDiyaBtn" class="btn btn-ghost btn-sm" type="button">Float a lotus diya</button>
+        </div>
+        <div class="sub-panel" id="panel-sparkler" hidden>
+          <button id="clearTrailBtn" class="btn btn-ghost btn-sm" type="button">Clear light trail</button>
+        </div>
+        <div class="sub-panel" id="panel-aarti" hidden>
+          <button id="performAartiBtn" class="btn btn-primary btn-sm" type="button">Perform aarti</button>
+          <button id="soundShankhaBtn" class="btn btn-ghost btn-sm" type="button">Blow the shankha</button>
+        </div>
+        <div class="sub-panel" id="panel-rocket" hidden>
+          <button id="barrageRocketsBtn" class="btn btn-primary btn-sm" type="button">Launch three</button>
+        </div>
+        <div class="sub-panel" id="panel-anar" hidden>
+          <button id="multiAnarBtn" class="btn btn-primary btn-sm" type="button">Light three anars</button>
+        </div>
+        <div class="sub-panel" id="panel-chakri" hidden>
+          <button id="twinChakriBtn" class="btn btn-primary btn-sm" type="button">Spin two chakris</button>
+        </div>
+        <div class="sub-panel" id="panel-lantern" hidden>
+          <button id="openWishModalBtn" class="btn btn-primary btn-sm" type="button">Write a wish</button>
+        </div>
       </div>
-      <button id="lightAllDiyasBtn" class="hud-action-btn glow-amber">🔥 Light All Diyas</button>
-      <button id="resetDiyasBtn" class="hud-action-btn outline">💨 Extinguish</button>
-      <button id="spawnFloatingDiyaBtn" class="hud-action-btn lotus">🪷 Float Lotus Diya</button>
     </div>
 
-    <!-- Sparkler Controls -->
-    <div class="sub-panel" id="panel-sparkler" style="display:none;">
-      <span class="hud-hint">🪄 Move your cursor to paint golden light trails in 3D air! Sizzling sparks follow your wand:</span>
-      <button id="clearTrailBtn" class="hud-action-btn outline">🧹 Clear Trail</button>
-    </div>
-
-    <!-- Maha Aarti Mode Controls -->
-    <div class="sub-panel" id="panel-aarti" style="display:none;">
-      <span class="hud-hint">🕯️ Panch-Pradip Brass Aarti Thali with camphor flames & flowers:</span>
-      <button id="performAartiBtn" class="hud-action-btn glow-gold">✨ Perform Maha Aarti Ceremony</button>
-      <button id="soundShankhaBtn" class="hud-action-btn outline">🐚 Blow Shankha (Conch)</button>
-    </div>
-
-    <!-- Rocket Mode Controls -->
-    <div class="sub-panel" id="panel-rocket" style="display:none;">
-      <span class="hud-hint">🎯 Click anywhere in the 3D sky to launch a whistling rocket:</span>
-      <button id="barrageRocketsBtn" class="hud-action-btn glow-amber">🚀 Triple Rocket Salvo</button>
-    </div>
-
-    <!-- Anar Mode Controls -->
-    <div class="sub-panel" id="panel-anar" style="display:none;">
-      <span class="hud-hint">🌋 Click anywhere on the courtyard stone ground to place & ignite an Anar!</span>
-      <button id="multiAnarBtn" class="hud-action-btn glow-amber">💥 Ignite 3 Anars</button>
-    </div>
-
-    <!-- Chakri Mode Controls -->
-    <div class="sub-panel" id="panel-chakri" style="display:none;">
-      <span class="hud-hint">🌀 Click on the courtyard ground to ignite a whirling Chakri!</span>
-      <button id="twinChakriBtn" class="hud-action-btn glow-amber">🌪️ Twin Chakris</button>
-    </div>
-
-    <!-- Wish Lantern Controls -->
-    <div class="sub-panel" id="panel-lantern" style="display:none;">
-      <span class="hud-hint">🏮 Write a sincere prayer and release your glowing lantern into the heavens:</span>
-      <button id="openWishModalBtn" class="hud-action-btn glow-gold">✍️ Write & Release Wish</button>
-    </div>
+    <nav class="modes" aria-label="Celebrations">
+      <button class="mode-tab active" type="button" data-mode="diya" aria-pressed="true"><svg aria-hidden="true"><use href="#i-diya"/></svg><span>Diyas</span></button>
+      <button class="mode-tab" type="button" data-mode="sparkler" aria-pressed="false"><svg aria-hidden="true"><use href="#i-sparkler"/></svg><span>Phuljhadi</span></button>
+      <button class="mode-tab" type="button" data-mode="aarti" aria-pressed="false"><svg aria-hidden="true"><use href="#i-aarti"/></svg><span>Aarti</span></button>
+      <button class="mode-tab" type="button" data-mode="rocket" aria-pressed="false"><svg aria-hidden="true"><use href="#i-rocket"/></svg><span>Rockets</span></button>
+      <button class="mode-tab" type="button" data-mode="anar" aria-pressed="false"><svg aria-hidden="true"><use href="#i-anar"/></svg><span>Anar</span></button>
+      <button class="mode-tab" type="button" data-mode="chakri" aria-pressed="false"><svg aria-hidden="true"><use href="#i-chakri"/></svg><span>Chakri</span></button>
+      <button class="mode-tab" type="button" data-mode="lantern" aria-pressed="false"><svg aria-hidden="true"><use href="#i-lantern"/></svg><span>Lanterns</span></button>
+    </nav>
   </div>
 
-  <!-- Instruction Tip -->
-  <div class="interaction-hint" id="interactionHint">
-    💡 <span>Drag left/right to rotate view in 3D • Scroll to zoom • Click unlit diyas to ignite</span>
-  </div>
+  <button class="show-ui" id="showUiBtn" type="button"><svg aria-hidden="true"><use href="#i-eye"/></svg>Show controls</button>
+  <p class="credit hud">With love, WebDevWithPritom</p>
 
-  <!-- Real Video Cinema Modal -->
-  <div class="modal-overlay" id="cinemaModalOverlay">
-    <div class="festive-modal cinema-modal">
+  <!-- Video modal -->
+  <div class="modal-overlay" id="cinemaModalOverlay" aria-hidden="true">
+    <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="cinemaTitle">
       <div class="modal-header">
-        <span class="modal-icon">🎬</span>
-        <h2>Actual Real Diwali Celebrations & Fireworks</h2>
-        <button class="modal-close" id="closeCinemaModalBtn">✕</button>
+        <h2 id="cinemaTitle">Real Diwali fireworks</h2>
+        <button class="icon-btn modal-close" id="closeCinemaModalBtn" type="button" aria-label="Close"><svg aria-hidden="true"><use href="#i-close"/></svg></button>
       </div>
-      <div class="modal-body">
-        <p class="modal-intro">Watch genuine high-definition festive fireworks and real ground crackers:</p>
-        <div class="cinema-video-frame">
-          <video id="realCinemaVideo" controls autoplay loop playsinline>
-            <source src="/videos/grand_fireworks.mp4" type="video/mp4">
-          </video>
-        </div>
-        <div class="video-channel-pills">
-          <button class="channel-pill active" data-src="/videos/grand_fireworks.mp4">🎆 Real Sky Fireworks</button>
-          <button class="channel-pill" data-src="/videos/diwali_crackers_01.ogv">🪔 Real Ground Crackers</button>
-          <button class="channel-pill" data-src="/videos/diwali_crackers_02.ogv">🌋 Real Phuljhadi & Anar</button>
-        </div>
+      <div class="video-frame">
+        <video id="realCinemaVideo" controls loop playsinline preload="none"></video>
+      </div>
+      <div class="pill-row" role="group" aria-label="Choose a video">
+        <button class="pill channel-pill active" type="button" data-src="videos/grand_fireworks.mp4" aria-pressed="true">Sky fireworks</button>
+        <button class="pill channel-pill" type="button" data-src="videos/diwali_crackers_01.mp4" aria-pressed="false">Ground crackers</button>
+        <button class="pill channel-pill" type="button" data-src="videos/diwali_crackers_02.mp4" aria-pressed="false">Phuljhadi and anar</button>
       </div>
     </div>
   </div>
 
-  <!-- Modal for Wish Lantern -->
-  <div class="modal-overlay" id="wishModalOverlay">
-    <div class="festive-modal">
+  <!-- Wish modal -->
+  <div class="modal-overlay" id="wishModalOverlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="wishTitle">
       <div class="modal-header">
-        <span class="modal-icon">🏮</span>
-        <h2>Release a Sacred Diwali Wish</h2>
-        <button class="modal-close" id="closeWishModalBtn">✕</button>
+        <h2 id="wishTitle">Send a wish to the sky</h2>
+        <button class="icon-btn modal-close" id="closeWishModalBtn" type="button" aria-label="Close"><svg aria-hidden="true"><use href="#i-close"/></svg></button>
       </div>
-      <div class="modal-body">
-        <p class="modal-intro">Your prayer will be inscribed upon a luminous 3D sky lantern and released towards the heavens, carrying your blessings into the cosmos.</p>
-        
-        <div class="input-group">
-          <label for="wishInput">Your Diwali Prayer / Wish:</label>
-          <textarea id="wishInput" rows="3" placeholder="e.g. Wishing eternal health, peace, and abundance for my family and the world..."></textarea>
-        </div>
-
-        <div class="input-group">
-          <label for="wishAuthor">Your Name:</label>
-          <input type="text" id="wishAuthor" placeholder="e.g. Aryan & Family" value="Devotee">
-        </div>
-
-        <div class="quick-wishes">
-          <span>Quick wishes: </span>
-          <button class="quick-wish-chip" data-text="May light always triumph over darkness and wisdom over ignorance!">✨ Light & Wisdom</button>
-          <button class="quick-wish-chip" data-text="Wishing boundless health, happiness, and prosperity to all beings!">🌸 Health & Prosperity</button>
-          <button class="quick-wish-chip" data-text="May all homes be blessed with peace, harmony, and radiant joy!">🕊️ Peace & Harmony</button>
-        </div>
+      <p class="modal-intro">Your wish rides up on a paper lantern. Tap any lantern in the sky to read what it carries.</p>
+      <div class="field">
+        <label for="wishInput">Your wish</label>
+        <textarea id="wishInput" rows="3" maxlength="160" placeholder="May every home be full of light and laughter"></textarea>
       </div>
-      <div class="modal-footer">
-        <button id="releaseLanternBtn" class="hud-action-btn glow-gold full-width">
-          ✨ Release Lantern into Sky
-        </button>
+      <div class="field">
+        <label for="wishAuthor">Your name</label>
+        <input type="text" id="wishAuthor" maxlength="40" placeholder="Aryan and family">
       </div>
+      <div class="pill-row" role="group" aria-label="Quick wishes">
+        <button class="pill quick-wish-chip" type="button" data-text="May light always win over darkness, and wisdom over ignorance.">Light and wisdom</button>
+        <button class="pill quick-wish-chip" type="button" data-text="Wishing good health, happiness and prosperity to everyone I love.">Health and prosperity</button>
+        <button class="pill quick-wish-chip" type="button" data-text="May every home be blessed with peace and joy.">Peace and joy</button>
+      </div>
+      <button id="releaseLanternBtn" class="btn btn-primary btn-block" type="button">Release the lantern</button>
     </div>
   </div>
 
-  <!-- Postcard Generator Modal -->
-  <div class="modal-overlay" id="postcardModalOverlay">
-    <div class="festive-modal postcard-modal">
+  <!-- Postcard modal -->
+  <div class="modal-overlay" id="postcardModalOverlay" aria-hidden="true">
+    <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="postcardTitle">
       <div class="modal-header">
-        <span class="modal-icon">📸</span>
-        <h2>3D Diwali Greeting Postcard</h2>
-        <button class="modal-close" id="closePostcardModalBtn">✕</button>
+        <h2 id="postcardTitle">Your Diwali postcard</h2>
+        <button class="icon-btn modal-close" id="closePostcardModalBtn" type="button" aria-label="Close"><svg aria-hidden="true"><use href="#i-close"/></svg></button>
       </div>
-      <div class="modal-body">
-        <p class="modal-intro">Your live 3D view has been captured into an ornate festival postcard with royal gold borders!</p>
-        
-        <div class="postcard-canvas-wrapper">
-          <canvas id="postcardCanvas" width="900" height="600"></canvas>
+      <div class="postcard-frame">
+        <canvas id="postcardCanvas" width="1200" height="800" aria-label="Postcard preview"></canvas>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="postcardRecipient">To</label>
+          <input type="text" id="postcardRecipient" maxlength="40" value="Dear loved ones">
         </div>
-
-        <div class="postcard-inputs">
-          <div class="input-group">
-            <label for="postcardRecipient">To (Recipient):</label>
-            <input type="text" id="postcardRecipient" value="Dear Loved Ones">
-          </div>
-          <div class="input-group">
-            <label for="postcardSender">From (Sender):</label>
-            <input type="text" id="postcardSender" value="With Love & Blessings">
-          </div>
+        <div class="field">
+          <label for="postcardSender">From</label>
+          <input type="text" id="postcardSender" maxlength="40" value="With love and blessings">
         </div>
       </div>
-      <div class="modal-footer">
-        <button id="downloadPostcardBtn" class="hud-action-btn glow-gold full-width">
-          📥 Download Postcard as PNG
-        </button>
-      </div>
+      <button id="downloadPostcardBtn" class="btn btn-primary btn-block" type="button">Download postcard</button>
     </div>
   </div>
 
-  <!-- Floating Wish Reader Popup -->
-  <div class="wish-card-popup" id="wishCardPopup">
-    <div class="popup-pin">🏮 Sky Lantern Wish</div>
+  <!-- Wish reader -->
+  <div class="wish-card-popup" id="wishCardPopup" role="dialog" aria-labelledby="wishCardLabel" aria-hidden="true">
+    <p class="popup-pin" id="wishCardLabel">A wish from the sky</p>
     <p class="popup-wish-text" id="popupWishText"></p>
-    <div class="popup-wish-author" id="popupWishAuthor"></div>
-    <button class="popup-close-btn" id="closePopupBtn">Close</button>
+    <p class="popup-wish-author" id="popupWishAuthor"></p>
+    <button class="btn btn-ghost btn-sm" id="closePopupBtn" type="button">Close</button>
   </div>
 
-  <!-- Notification Toast -->
-  <div class="toast-notification" id="toastNotice">Happy Diwali! 🪔✨</div>
+  <div class="toast" id="toastNotice" role="status" aria-live="polite"></div>
 
-  <!-- Main 3D App Controller -->
   <script type="module" src="src/main.js"></script>
 </body>
 </html>

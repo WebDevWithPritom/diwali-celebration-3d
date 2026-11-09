@@ -1,551 +1,752 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { Water } from 'three/examples/jsm/objects/Water.js';
 import { audio } from './audio.js';
+import { createFlame, flameUniforms } from './flame.js';
+import {
+  createSandstoneTiles, createSandstone, createRangoli, createWaterNormals,
+  createSkyline, createHaveliFacade, createMoonTexture, createBeamTexture, createTerracotta
+} from './textures.js';
 
 // ==========================================================================
-// 3D SCENE: RADIANT TEMPLE GHATS, WATER SAROVAR, ATMOSPHERE & LASER SHOW
+// THE SCENE: a lamp-lit haveli courtyard above a river ghat on Diwali night
 // ==========================================================================
+
+const BASE = import.meta.env.BASE_URL;
+const isSmall = window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 760;
+
+const ATMOSPHERES = {
+  midnight: {
+    top: 0x020309, mid: 0x0a0f2a, horizon: 0x2b1a2a, glow: 0x5a2a12, fog: 0x120d16,
+    hemiSky: 0x2a3866, hemiGround: 0x2a1408, hemi: 0.55, moon: 0.5, exposure: 1.0, stars: 1
+  },
+  twilight: {
+    top: 0x0b1036, mid: 0x3b2b6c, horizon: 0xc0566a, glow: 0xff8a4a, fog: 0x3a2440,
+    hemiSky: 0x7a6aa8, hemiGround: 0x3a1c14, hemi: 0.9, moon: 0.7, exposure: 1.02, stars: 0.35
+  },
+  golden: {
+    top: 0x120904, mid: 0x3a1c08, horizon: 0xa8521a, glow: 0xffaa44, fog: 0x2a1408,
+    hemiSky: 0x8a5a2a, hemiGround: 0x3a1a08, hemi: 0.8, moon: 0.45, exposure: 1.0, stars: 0.5
+  }
+};
 
 export class DiwaliScene {
   constructor(container) {
     this.container = container;
-    this.scene = null;
-    this.camera = null;
-    this.renderer = null;
-    this.waterMesh = null;
-    this.waterClock = 0;
-    this.starPoints = null;
-
-    // Lights
-    this.ambientLight = null;
-    this.moonLight = null;
-    this.warmRim = null;
-    this.courtyardGlow = null;
-
-    // Aarti Thali Group & Animation
-    this.aartiThali = null;
+    this.sweetMeshes = [];
+    this.laserBeams = [];
+    this.isLaserActive = false;
+    this.laserLevel = 0;
+    this.laserTimer = null;
     this.isAartiActive = false;
     this.aartiTime = 0;
+    this.motion = 1;
+    this.elapsed = 0;
+    this.flames = [];
+    this.onAartiStart = null;
 
-    // Laser Beams Group (Ayodhya Laser Deepotsav)
-    this.laserGroup = new THREE.Group();
-    this.isLaserActive = false;
-    this.laserBeams = [];
-
-    // Interactive Sweets (Mithai) Meshes for Raycasting
-    this.sweetMeshes = [];
-
-    // Blender 3D Model Integration
-    this.blenderGroup = new THREE.Group();
-    this.isBlenderModelVisible = true;
+    this.atmo = {};
+    this.atmoTarget = ATMOSPHERES.midnight;
 
     this.init();
   }
 
   init() {
-    // 1. Scene - Bright, Rich Royal Festive Sky
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x1a0d38);
-    this.scene.fog = new THREE.FogExp2(0x221045, 0.005);
+    this.scene.fog = new THREE.FogExp2(ATMOSPHERES.midnight.fog, 0.0105);
 
-    // 2. Camera
-    this.camera = new THREE.PerspectiveCamera(
-      55,
-      window.innerWidth / window.innerHeight,
-      0.1,
-      1000
-    );
+    this.camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1200);
     this.camera.position.set(0, 16, 28);
     this.camera.lookAt(0, 2, 0);
 
-    // 3. Renderer - Optimized for ZERO LAG (1.0 Pixel Ratio)
-    this.renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      powerPreference: 'high-performance',
-      preserveDrawingBuffer: true
-    });
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, isSmall ? 1.5 : 2));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.setPixelRatio(1.0);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.35;
-
+    this.renderer.toneMappingExposure = 1.0;
+    this.renderer.domElement.setAttribute('aria-label', 'Interactive 3D Diwali courtyard');
     this.container.appendChild(this.renderer.domElement);
 
-    // 4. Lights
+    // Warm, dim environment so brass and oil catch soft reflections
+    this.setupEnvironment();
     this.setupLighting();
-
-    // 5. Architecture & Models
-    this.setupStarfield();
+    this.setupSky();
     this.setupCourtyard();
-    this.setupWaterGhat();
-    this.setupDecorations();
+    this.setupHaveli();
+    this.setupPillars();
+    this.setupGarlands();
+    this.setupWater();
     this.setupAartiThali();
     this.setupMithaiThali();
     this.setupLaserBeams();
     this.setupBlenderModel();
+    this.setupPostprocessing();
 
-    window.addEventListener('resize', () => this.onWindowResize());
+    this.setAtmosphere('midnight', true);
+  }
+
+  // ------------------------------------------------------------------------
+  setupEnvironment() {
+    const envScene = new THREE.Scene();
+    envScene.background = new THREE.Color(0x0a0710);
+    const blob = (color, pos, s) => {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(s, 16, 8), new THREE.MeshBasicMaterial({ color }));
+      m.position.copy(pos);
+      envScene.add(m);
+    };
+    blob(0xffa04a, new THREE.Vector3(0, 1, 6), 2.5);
+    blob(0xff8a30, new THREE.Vector3(-6, 0.5, -4), 2);
+    blob(0xffc070, new THREE.Vector3(5, 3, -5), 1.6);
+    blob(0x3a4a8a, new THREE.Vector3(0, 10, 0), 4);
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.scene.environment = pmrem.fromScene(envScene, 0.04).texture;
+    this.scene.environmentIntensity = 0.55;
+    pmrem.dispose();
   }
 
   setupLighting() {
-    this.ambientLight = new THREE.AmbientLight(0xffdfa0, 1.8);
-    this.scene.add(this.ambientLight);
+    this.hemi = new THREE.HemisphereLight(0x2a3866, 0x2a1408, 0.55);
+    this.scene.add(this.hemi);
 
-    this.moonLight = new THREE.DirectionalLight(0xffeedd, 1.5);
-    this.moonLight.position.set(20, 60, -30);
+    this.moonLight = new THREE.DirectionalLight(0xaebfff, 0.5);
+    this.moonLight.position.set(-40, 60, -60);
     this.scene.add(this.moonLight);
-
-    this.warmRim = new THREE.DirectionalLight(0xff9900, 1.2);
-    this.warmRim.position.set(-30, 25, 20);
-    this.scene.add(this.warmRim);
-
-    this.courtyardGlow = new THREE.PointLight(0xffb703, 2.5, 40);
-    this.courtyardGlow.position.set(0, 4, -4);
-    this.scene.add(this.courtyardGlow);
   }
 
-  setAtmosphere(mode) {
-    if (mode === 'twilight') {
-      this.scene.background.setHex(0x38154e);
-      this.scene.fog.color.setHex(0x42175c);
-      this.ambientLight.color.setHex(0xffaa77);
-      this.ambientLight.intensity = 2.2;
-      this.moonLight.color.setHex(0xff9e79);
-      this.moonLight.intensity = 1.6;
-    } else if (mode === 'golden') {
-      this.scene.background.setHex(0x2d1404);
-      this.scene.fog.color.setHex(0x381b08);
-      this.ambientLight.color.setHex(0xffbb33);
-      this.ambientLight.intensity = 2.5;
-      this.moonLight.color.setHex(0xffd700);
-      this.moonLight.intensity = 1.8;
-    } else { // midnight
-      this.scene.background.setHex(0x1a0d38);
-      this.scene.fog.color.setHex(0x221045);
-      this.ambientLight.color.setHex(0xffdfa0);
-      this.ambientLight.intensity = 1.8;
-      this.moonLight.color.setHex(0xffeedd);
-      this.moonLight.intensity = 1.5;
+  // ------------------------------------------------------------------------
+  // Sky dome, stars, moon and the distant town
+  // ------------------------------------------------------------------------
+  setupSky() {
+    this.skyUniforms = {
+      uTop: { value: new THREE.Color() },
+      uMid: { value: new THREE.Color() },
+      uHorizon: { value: new THREE.Color() },
+      uGlow: { value: new THREE.Color() }
+    };
+    const sky = new THREE.Mesh(
+      new THREE.SphereGeometry(600, 32, 16),
+      new THREE.ShaderMaterial({
+        uniforms: this.skyUniforms,
+        side: THREE.BackSide,
+        depthWrite: false,
+        vertexShader: /* glsl */ `
+          varying vec3 vDir;
+          void main() {
+            vDir = normalize(position);
+            vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            gl_Position = p.xyww;
+          }`,
+        fragmentShader: /* glsl */ `
+          uniform vec3 uTop; uniform vec3 uMid; uniform vec3 uHorizon; uniform vec3 uGlow;
+          varying vec3 vDir;
+          void main() {
+            float h = vDir.y;
+            vec3 c = mix(uHorizon, uMid, smoothstep(-0.02, 0.22, h));
+            c = mix(c, uTop, smoothstep(0.22, 0.85, h));
+            c += uGlow * exp(-max(h, 0.0) * 16.0) * 0.55;
+            if (h < 0.0) c = mix(uHorizon, uHorizon * 0.4, smoothstep(0.0, -0.2, h));
+            gl_FragColor = vec4(c, 1.0);
+          }`
+      })
+    );
+    sky.renderOrder = -10;
+    this.sky = sky;
+    this.scene.add(sky);
+
+    // twinkling stars
+    const n = isSmall ? 1200 : 2200;
+    const pos = new Float32Array(n * 3);
+    const phase = new Float32Array(n);
+    const size = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const th = Math.random() * Math.PI * 2;
+      const y = 0.08 + Math.pow(Math.random(), 0.7) * 0.92;
+      const r = Math.sqrt(1 - y * y);
+      pos[i * 3] = Math.cos(th) * r * 500;
+      pos[i * 3 + 1] = y * 500;
+      pos[i * 3 + 2] = Math.sin(th) * r * 500;
+      phase[i] = Math.random() * 100;
+      size[i] = Math.random() < 0.04 ? 3.2 : 1 + Math.random() * 1.4;
     }
-  }
-
-  setupStarfield() {
-    const starCount = 800;
-    const geometry = new THREE.BufferGeometry();
-    const positions = new Float32Array(starCount * 3);
-    const colors = new Float32Array(starCount * 3);
-
-    for (let i = 0; i < starCount; i++) {
-      const u = Math.random();
-      const v = Math.random();
-      const theta = u * 2.0 * Math.PI;
-      const phi = Math.acos(2.0 * v - 1.0);
-      const r = 240 + Math.random() * 60;
-
-      const sinPhi = Math.sin(phi);
-      positions[i * 3] = r * sinPhi * Math.cos(theta);
-      positions[i * 3 + 1] = Math.abs(r * Math.cos(phi)) + 12;
-      positions[i * 3 + 2] = r * sinPhi * Math.sin(theta);
-
-      colors[i * 3] = 1.0;
-      colors[i * 3 + 1] = 0.9;
-      colors[i * 3 + 2] = 0.6;
-    }
-
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-
-    const material = new THREE.PointsMaterial({
-      size: 1.8,
-      vertexColors: true,
+    const sg = new THREE.BufferGeometry();
+    sg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    sg.setAttribute('aPhase', new THREE.BufferAttribute(phase, 1));
+    sg.setAttribute('aSize', new THREE.BufferAttribute(size, 1));
+    this.starUniforms = { uTime: { value: 0 }, uAlpha: { value: 1 }, uMotion: flameUniforms.uMotion, uPixel: { value: this.renderer.getPixelRatio() } };
+    this.stars = new THREE.Points(sg, new THREE.ShaderMaterial({
+      uniforms: this.starUniforms,
       transparent: true,
-      opacity: 0.9
-    });
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      vertexShader: /* glsl */ `
+        attribute float aPhase; attribute float aSize;
+        uniform float uTime; uniform float uMotion; uniform float uPixel;
+        varying float vTw;
+        void main() {
+          vTw = 0.65 + 0.35 * sin(uTime * (1.2 + fract(aPhase) * 2.0) + aPhase) * uMotion;
+          vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          gl_Position = p.xyww;
+          gl_PointSize = aSize * uPixel;
+        }`,
+      fragmentShader: /* glsl */ `
+        uniform float uAlpha; varying float vTw;
+        void main() {
+          float d = length(gl_PointCoord - 0.5) * 2.0;
+          float a = smoothstep(1.0, 0.0, d) * vTw * uAlpha;
+          gl_FragColor = vec4(vec3(1.0, 0.95, 0.85) * a, a);
+        }`
+    }));
+    this.stars.renderOrder = -9;
+    this.stars.frustumCulled = false;
+    this.scene.add(this.stars);
 
-    this.starPoints = new THREE.Points(geometry, material);
-    this.scene.add(this.starPoints);
+    // moon
+    const moon = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: createMoonTexture(), transparent: true, depthWrite: false, fog: false, color: 0xfff1d6
+    }));
+    moon.position.set(-170, 150, -330);
+    moon.scale.setScalar(46);
+    moon.renderOrder = -8;
+    this.moon = moon;
+    this.scene.add(moon);
+
+    // the town across the river, wrapped around the horizon
+    const skyTex = createSkyline();
+    skyTex.repeat.set(3, 1);
+    const town = new THREE.Mesh(
+      new THREE.CylinderGeometry(300, 300, 64, 64, 1, true),
+      new THREE.MeshBasicMaterial({ map: skyTex, transparent: true, alphaTest: 0.05, side: THREE.BackSide, fog: false, depthWrite: false })
+    );
+    town.position.y = 26;
+    town.renderOrder = -7;
+    this.scene.add(town);
   }
 
+  // ------------------------------------------------------------------------
+  // Courtyard floor, rangoli, ghat steps
+  // ------------------------------------------------------------------------
   setupCourtyard() {
-    const groundGeom = new THREE.BoxGeometry(36, 0.6, 26);
-    const groundMat = new THREE.MeshStandardMaterial({
-      color: 0x422660,
-      roughness: 0.6,
-      metalness: 0.1
+    const tiles = createSandstoneTiles([6, 4.3]);
+    const floorMat = new THREE.MeshStandardMaterial({
+      map: tiles.map, bumpMap: tiles.bumpMap, bumpScale: 1.2, roughness: 0.82, metalness: 0
     });
-    const ground = new THREE.Mesh(groundGeom, groundMat);
+    const ground = new THREE.Mesh(new THREE.BoxGeometry(36, 0.6, 26), floorMat);
     ground.position.set(0, -0.3, -4);
     this.scene.add(ground);
+    this.ground = ground;
 
-    const rangoliCanvas = this.generateRangoliTexture();
-    const rangoliTex = new THREE.CanvasTexture(rangoliCanvas);
-    const rangoliGeom = new THREE.PlaneGeometry(12, 12);
-    const rangoliMat = new THREE.MeshStandardMaterial({
-      map: rangoliTex,
-      transparent: true,
-      roughness: 0.4
-    });
-    const rangoliMesh = new THREE.Mesh(rangoliGeom, rangoliMat);
-    rangoliMesh.rotation.x = -Math.PI / 2;
-    rangoliMesh.position.set(0, 0.02, -4);
-    this.scene.add(rangoliMesh);
+    const rangoli = new THREE.Mesh(
+      new THREE.PlaneGeometry(12, 12),
+      new THREE.MeshStandardMaterial({
+        map: createRangoli(), transparent: true, roughness: 0.95, metalness: 0,
+        polygonOffset: true, polygonOffsetFactor: -1
+      })
+    );
+    rangoli.rotation.x = -Math.PI / 2;
+    rangoli.position.set(0, 0.005, -4);
+    this.scene.add(rangoli);
 
-    const stepMat = new THREE.MeshStandardMaterial({
-      color: 0x331a4f,
-      roughness: 0.7
-    });
+    // scattered marigold petals around the rangoli
+    const petalGeom = new THREE.CircleGeometry(0.07, 6).rotateX(-Math.PI / 2);
+    const petalMat = new THREE.MeshStandardMaterial({ roughness: 0.7, side: THREE.DoubleSide });
+    const petals = new THREE.InstancedMesh(petalGeom, petalMat, 260);
+    const m = new THREE.Matrix4();
+    const c = new THREE.Color();
+    for (let i = 0; i < 260; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = 6.2 + Math.random() * 1.4;
+      m.makeRotationY(Math.random() * 6.28);
+      m.setPosition(Math.cos(a) * r, 0.012, -4 + Math.sin(a) * r);
+      petals.setMatrixAt(i, m);
+      petals.setColorAt(i, c.setHex(Math.random() < 0.6 ? 0xf08a12 : Math.random() < 0.5 ? 0xf6c21c : 0xc2183a));
+    }
+    this.scene.add(petals);
 
-    const stepWidth = 36;
-    const stepDepth = 2.2;
-    const stepHeight = 0.6;
-    const numSteps = 4;
-
-    for (let i = 0; i < numSteps; i++) {
-      const stepGeom = new THREE.BoxGeometry(stepWidth, stepHeight, stepDepth);
-      const step = new THREE.Mesh(stepGeom, stepMat);
-      step.position.set(0, -0.3 - (i * stepHeight), 9 + (i * stepDepth));
+    // ghat steps descending into the river
+    const stoneMat = new THREE.MeshStandardMaterial({ map: createSandstone([6, 0.4]), roughness: 0.85 });
+    for (let i = 0; i < 4; i++) {
+      const step = new THREE.Mesh(new THREE.BoxGeometry(36, 0.6, 2.2), stoneMat);
+      step.position.set(0, -0.3 - i * 0.6 - 0.6, 10.1 + i * 2.2);
       this.scene.add(step);
     }
-  }
-
-  setupWaterGhat() {
-    const waterGeom = new THREE.PlaneGeometry(120, 60, 32, 32);
-    const waterMat = new THREE.MeshStandardMaterial({
-      color: 0x09335a,
-      roughness: 0.1,
-      metalness: 0.9,
-      transparent: true,
-      opacity: 0.92
+    // retaining walls on either side of the ghat
+    const wallMat = new THREE.MeshStandardMaterial({ map: createSandstone([1, 2], [150, 108, 78]), roughness: 0.9 });
+    [-18.6, 18.6].forEach((x) => {
+      const w = new THREE.Mesh(new THREE.BoxGeometry(1.2, 3.4, 37), wallMat);
+      w.position.set(x, -1, 1.5);
+      this.scene.add(w);
     });
 
-    this.waterMesh = new THREE.Mesh(waterGeom, waterMat);
-    this.waterMesh.rotation.x = -Math.PI / 2;
-    this.waterMesh.position.set(0, -2.4, 38);
-    this.scene.add(this.waterMesh);
+    // plinth for the panch-pradip lamp
+    const plinthMat = new THREE.MeshStandardMaterial({ map: createSandstone([1, 1], [182, 140, 104]), roughness: 0.8 });
+    const p1 = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.3, 3.6), plinthMat);
+    p1.position.set(0, 0.15, -11);
+    const p2 = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.3, 2.4), plinthMat);
+    p2.position.set(0, 0.45, -11);
+    this.scene.add(p1, p2);
   }
 
-  setupDecorations() {
-    const pillarGeom = new THREE.CylinderGeometry(0.5, 0.6, 7, 12);
-    const pillarCapGeom = new THREE.ConeGeometry(0.9, 1.2, 12);
-    const pillarMat = new THREE.MeshStandardMaterial({
-      color: 0x522e75,
-      roughness: 0.6
+  setupHaveli() {
+    const tex = createHaveliFacade();
+    const mat = new THREE.MeshStandardMaterial({
+      map: tex.map, emissiveMap: tex.emissiveMap, emissive: 0xffffff, emissiveIntensity: 0.75, roughness: 0.9
     });
+    const facade = new THREE.Mesh(new THREE.PlaneGeometry(44, 11), mat);
+    facade.position.set(0, 5.5, -17.2);
+    this.scene.add(facade);
 
-    const pillarPositions = [
-      [-16, 3.5, -15],
-      [16, 3.5, -15],
-      [-16, 3.5, 7],
-      [16, 3.5, 7]
-    ];
+    const capMat = new THREE.MeshStandardMaterial({ map: createSandstone([8, 0.5], [160, 116, 84]), roughness: 0.85 });
+    const parapet = new THREE.Mesh(new THREE.BoxGeometry(45, 0.6, 1.2), capMat);
+    parapet.position.set(0, 11.2, -17.3);
+    const back = new THREE.Mesh(new THREE.BoxGeometry(45, 11, 0.4), capMat);
+    back.position.set(0, 5.5, -17.6);
+    this.scene.add(parapet, back);
 
-    pillarPositions.forEach(pos => {
-      const group = new THREE.Group();
-      const col = new THREE.Mesh(pillarGeom, pillarMat);
-      group.add(col);
+    // warm light spilling out of the doorway onto the courtyard
+    this.doorLight = new THREE.PointLight(0xff9a40, 16, 26, 1.8);
+    this.doorLight.position.set(0, 2.6, -15.8);
+    this.scene.add(this.doorLight);
+  }
 
-      const cap = new THREE.Mesh(pillarCapGeom, pillarMat);
-      cap.position.y = 3.9;
-      group.add(cap);
+  setupPillars() {
+    const prof = [
+      [0, 0], [1.0, 0], [1.0, 0.45], [0.82, 0.55], [0.72, 0.8], [0.62, 0.95], [0.52, 1.1],
+      [0.5, 5.6], [0.6, 5.75], [0.62, 5.9], [0.82, 6.15], [0.98, 6.45], [0.98, 6.7], [0, 6.7]
+    ].map(([x, y]) => new THREE.Vector2(x, y));
+    const geom = new THREE.LatheGeometry(prof, 48);
+    // fluting on the shaft
+    const pos = geom.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const y = pos.getY(i);
+      if (y > 1.15 && y < 5.55) {
+        const x = pos.getX(i), z = pos.getZ(i);
+        const th = Math.atan2(z, x);
+        const k = 1 + 0.045 * Math.cos(th * 16);
+        pos.setX(i, x * k);
+        pos.setZ(i, z * k);
+      }
+    }
+    geom.computeVertexNormals();
+    const mat = new THREE.MeshStandardMaterial({ map: createSandstone([3, 1.5], [176, 132, 96]), roughness: 0.8 });
 
-      const lanternGeom = new THREE.OctahedronGeometry(0.5);
-      const lanternMat = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
-      const lantern = new THREE.Mesh(lanternGeom, lanternMat);
-      lantern.position.set(0, 2.5, 0);
-      group.add(lantern);
+    const bowlGeom = new THREE.LatheGeometry(
+      [[0, 0], [0.3, 0], [0.5, 0.18], [0.55, 0.3], [0.5, 0.3], [0.3, 0.16], [0, 0.14]].map(([x, y]) => new THREE.Vector2(x, y)), 24);
+    bowlGeom.computeVertexNormals();
+    const clay = new THREE.MeshStandardMaterial({ map: createTerracotta(false, 8), roughness: 0.9 });
 
-      const lanternLight = new THREE.PointLight(0xffaa00, 1.8, 16);
-      lanternLight.position.set(0, 2.5, 0);
-      group.add(lanternLight);
+    this.pillarTops = [];
+    [[-16, -15], [16, -15], [-16, 7], [16, 7]].forEach(([x, z]) => {
+      const pillar = new THREE.Mesh(geom, mat);
+      pillar.position.set(x, 0, z);
+      this.scene.add(pillar);
 
-      group.position.set(pos[0], pos[1], pos[2]);
-      this.scene.add(group);
+      const bowl = new THREE.Mesh(bowlGeom, clay);
+      bowl.position.set(x, 6.7, z);
+      this.scene.add(bowl);
+      const flame = createFlame({ width: 0.28, height: 0.7, halo: 2.4, seed: Math.random() * 50 });
+      flame.position.set(x, 6.92, z);
+      this.scene.add(flame);
+      this.flames.push(flame);
+
+      const light = new THREE.PointLight(0xffa04a, 22, 26, 1.8);
+      light.position.set(x, 7.5, z);
+      this.scene.add(light);
+      this.pillarTops.push(new THREE.Vector3(x, 6.25, z));
     });
   }
 
+  // Marigold garlands and warm string lights hung between the pillars
+  setupGarlands() {
+    const spans = [];
+    const A = (x, z) => new THREE.Vector3(x, 6.1, z);
+    for (let s = 0; s < 4; s++) spans.push([A(-16 + s * 8, -15), A(-16 + (s + 1) * 8, -15)]);
+    for (const x of [-16, 16]) {
+      const zs = [-15, -7.7, -0.3, 7];
+      for (let s = 0; s < 3; s++) spans.push([A(x, zs[s]), A(x, zs[s + 1])]);
+    }
+
+    const flowers = [];
+    const bulbs = [];
+    spans.forEach(([a, b]) => {
+      const len = a.distanceTo(b);
+      const sag = len * 0.16;
+      const nF = Math.round(len * 7);
+      for (let i = 0; i <= nF; i++) {
+        const t = i / nF;
+        const p = a.clone().lerp(b, t);
+        p.y -= sag * 4 * t * (1 - t);
+        flowers.push(p);
+      }
+      const nB = Math.round(len * 1.6);
+      for (let i = 0; i <= nB; i++) {
+        const t = i / nB;
+        const p = a.clone().lerp(b, t);
+        p.y -= sag * 1.3 * 4 * t * (1 - t) + 0.25;
+        bulbs.push(p);
+      }
+    });
+
+    const fGeom = new THREE.IcosahedronGeometry(0.15, 1);
+    const fMat = new THREE.MeshStandardMaterial({ roughness: 0.75, flatShading: true });
+    const fl = new THREE.InstancedMesh(fGeom, fMat, flowers.length);
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const sc = new THREE.Vector3();
+    const col = new THREE.Color();
+    flowers.forEach((p, i) => {
+      q.setFromEuler(new THREE.Euler(Math.random() * 3, Math.random() * 3, 0));
+      sc.set(1, 0.8, 1).multiplyScalar(0.85 + Math.random() * 0.3);
+      m.compose(p, q, sc);
+      fl.setMatrixAt(i, m);
+      fl.setColorAt(i, col.setHex(i % 9 < 5 ? 0xf08410 : 0xf7bd1a));
+    });
+    this.scene.add(fl);
+
+    // bulbs: warm whites with a few coloured ones, bright enough to bloom
+    const bGeom = new THREE.SphereGeometry(0.055, 8, 6);
+    const bMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: true });
+    this.bulbs = new THREE.InstancedMesh(bGeom, bMat, bulbs.length);
+    this.bulbBase = [];
+    const palette = [[3.2, 2.0, 0.9], [3.2, 2.0, 0.9], [3.2, 1.2, 0.5], [3.0, 0.6, 0.5], [2.6, 2.6, 1.6]];
+    bulbs.forEach((p, i) => {
+      m.makeTranslation(p.x, p.y, p.z);
+      this.bulbs.setMatrixAt(i, m);
+      const c = palette[i % palette.length];
+      this.bulbBase.push(c);
+      this.bulbs.setColorAt(i, col.setRGB(c[0], c[1], c[2]));
+    });
+    this.scene.add(this.bulbs);
+  }
+
+  // ------------------------------------------------------------------------
+  setupWater() {
+    // ends just short of the skyline ring so it never hides the far town
+    const geom = new THREE.PlaneGeometry(520, 280);
+    this.water = new Water(geom, {
+      textureWidth: isSmall ? 256 : 512,
+      textureHeight: isSmall ? 256 : 512,
+      waterNormals: createWaterNormals(),
+      sunDirection: new THREE.Vector3(-0.4, 0.6, -0.7).normalize(),
+      sunColor: 0x8a7a6a,
+      waterColor: 0x02121c,
+      distortionScale: 1.6,
+      fog: true,
+      alpha: 1
+    });
+    this.water.material.uniforms.size.value = 1.6;
+    this.water.rotation.x = -Math.PI / 2;
+    this.water.position.set(0, -2.36, 150);
+    this.scene.add(this.water);
+  }
+
+  // ------------------------------------------------------------------------
   setupAartiThali() {
     const group = new THREE.Group();
+    const brass = new THREE.MeshStandardMaterial({ color: 0xd9a441, metalness: 1, roughness: 0.26 });
 
-    const plateGeom = new THREE.CylinderGeometry(1.6, 1.4, 0.12, 24);
-    const brassMat = new THREE.MeshStandardMaterial({
-      color: 0xffd700,
-      metalness: 0.85,
-      roughness: 0.2
-    });
-    const plate = new THREE.Mesh(plateGeom, brassMat);
+    const plate = new THREE.Mesh(new THREE.LatheGeometry(
+      [[0, 0], [1.3, 0], [1.45, 0.06], [1.6, 0.14], [1.62, 0.17], [1.5, 0.12], [1.3, 0.05], [0, 0.04]]
+        .map(([x, y]) => new THREE.Vector2(x, y)), 64), brass);
+    plate.geometry.computeVertexNormals();
     group.add(plate);
 
-    const rimGeom = new THREE.TorusGeometry(1.58, 0.06, 6, 24);
-    rimGeom.rotateX(Math.PI / 2);
-    const rim = new THREE.Mesh(rimGeom, brassMat);
-    rim.position.y = 0.06;
-    group.add(rim);
-
-    const flameMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-    const outerFlameMat = new THREE.MeshBasicMaterial({ color: 0xff7700, transparent: true, opacity: 0.7 });
-
+    // five small brass lamps
+    const cupGeom = new THREE.LatheGeometry(
+      [[0, 0], [0.08, 0], [0.1, 0.08], [0.2, 0.16], [0.22, 0.2], [0.18, 0.18], [0, 0.15]]
+        .map(([x, y]) => new THREE.Vector2(x, y)), 24);
+    cupGeom.computeVertexNormals();
     for (let i = 0; i < 5; i++) {
-      const angle = (i / 5) * Math.PI * 2;
-      const cupGeom = new THREE.CylinderGeometry(0.2, 0.1, 0.18, 8);
-      const cup = new THREE.Mesh(cupGeom, brassMat);
-      cup.position.set(Math.cos(angle) * 1.0, 0.15, Math.sin(angle) * 1.0);
+      const a = (i / 5) * Math.PI * 2;
+      const cup = new THREE.Mesh(cupGeom, brass);
+      cup.position.set(Math.cos(a) * 0.95, 0.05, Math.sin(a) * 0.95);
       group.add(cup);
-
-      const fGroup = new THREE.Group();
-      fGroup.position.set(Math.cos(angle) * 1.0, 0.35, Math.sin(angle) * 1.0);
-
-      const fInner = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.35, 6), flameMat);
-      fInner.position.y = 0.17;
-      fGroup.add(fInner);
-
-      const fOuter = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.45, 6), outerFlameMat);
-      fOuter.position.y = 0.22;
-      fGroup.add(fOuter);
-
-      group.add(fGroup);
+      const f = createFlame({ width: 0.12, height: 0.32, halo: 0.7, seed: i * 7.3 });
+      f.position.set(Math.cos(a) * 0.95, 0.24, Math.sin(a) * 0.95);
+      group.add(f);
+      this.flames.push(f);
     }
 
-    const centerLight = new THREE.PointLight(0xffa500, 3.0, 16);
-    centerLight.position.set(0, 0.8, 0);
-    group.add(centerLight);
+    // kumkum and haldi bowls
+    const bowlGeom = new THREE.SphereGeometry(0.2, 20, 10, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
+    [[0x9e1a12, -0.25], [0xe7a91a, 0.25]].forEach(([c, x]) => {
+      const bowl = new THREE.Mesh(bowlGeom, brass);
+      bowl.rotation.x = Math.PI;
+      bowl.position.set(x, 0.22, 0);
+      const powder = new THREE.Mesh(new THREE.CircleGeometry(0.18, 20).rotateX(-Math.PI / 2),
+        new THREE.MeshStandardMaterial({ color: c, roughness: 1 }));
+      powder.position.set(x, 0.2, 0);
+      group.add(bowl, powder);
+    });
 
-    group.position.set(-6, 0.1, -2);
-    group.scale.set(0.9, 0.9, 0.9);
+    // marigold heads
+    const mg = new THREE.IcosahedronGeometry(0.11, 1);
+    const mgMat = new THREE.MeshStandardMaterial({ color: 0xf08410, roughness: 0.8, flatShading: true });
+    for (let i = 0; i < 9; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = 0.45 + Math.random() * 0.25;
+      const f = new THREE.Mesh(mg, mgMat);
+      f.scale.y = 0.65;
+      f.position.set(Math.cos(a) * r, 0.12, Math.sin(a) * r);
+      group.add(f);
+    }
 
+    this.thaliLight = new THREE.PointLight(0xffa04a, 3, 10, 2);
+    this.thaliLight.position.set(0, 0.9, 0);
+    group.add(this.thaliLight);
+
+    group.position.set(-6, 0.02, -2);
+    group.scale.setScalar(0.95);
     this.scene.add(group);
     this.aartiThali = group;
+    this.aartiHome = group.position.clone();
   }
 
-  // Mithai Platter with Clickable Interactive Sweets
   setupMithaiThali() {
     const group = new THREE.Group();
-    const silverMat = new THREE.MeshStandardMaterial({
-      color: 0xeeeeee,
-      metalness: 0.9,
-      roughness: 0.2
-    });
-    const plate = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.2, 0.08, 16), silverMat);
+    const silver = new THREE.MeshStandardMaterial({ color: 0xd8d8de, metalness: 1, roughness: 0.22 });
+    const plate = new THREE.Mesh(new THREE.LatheGeometry(
+      [[0, 0], [1.25, 0], [1.4, 0.07], [1.45, 0.12], [1.35, 0.09], [0, 0.04]]
+        .map(([x, y]) => new THREE.Vector2(x, y)), 64), silver);
+    plate.geometry.computeVertexNormals();
     group.add(plate);
 
-    // Kaju Katli (Silver diamond shapes)
-    const kajuMat = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.6, roughness: 0.3 });
-    for (let i = 0; i < 4; i++) {
-      const kaju = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.08, 0.3), kajuMat);
-      kaju.rotation.y = (i * Math.PI) / 4;
-      kaju.position.set(Math.cos(i) * 0.5, 0.08, Math.sin(i) * 0.5);
-      kaju.userData = { isSweet: true, name: "Kaju Katli (Cashew Fudge Diamond)" };
-      group.add(kaju);
-      this.sweetMeshes.push(kaju);
+    // kaju katli: diamonds with silver varak
+    const shape = new THREE.Shape();
+    shape.moveTo(0, 0.2); shape.lineTo(0.3, 0); shape.lineTo(0, -0.2); shape.lineTo(-0.3, 0); shape.closePath();
+    const kajuGeom = new THREE.ExtrudeGeometry(shape, { depth: 0.06, bevelEnabled: true, bevelSize: 0.012, bevelThickness: 0.012, bevelSegments: 2 });
+    kajuGeom.rotateX(-Math.PI / 2);
+    const kajuMat = new THREE.MeshStandardMaterial({ color: 0xeee2c8, roughness: 0.4, metalness: 0.35 });
+    for (let i = 0; i < 7; i++) {
+      const k = new THREE.Mesh(kajuGeom, kajuMat);
+      const a = (i / 7) * Math.PI * 2;
+      k.position.set(Math.cos(a) * 0.85, 0.06, Math.sin(a) * 0.85);
+      k.rotation.y = -a;
+      k.userData.name = 'Kaju Katli';
+      group.add(k);
+      this.sweetMeshes.push(k);
     }
 
-    // Motichoor Laddoos (Golden saffron spheres)
-    const laddooMat = new THREE.MeshStandardMaterial({ color: 0xff8800, roughness: 0.8 });
-    for (let j = 0; j < 5; j++) {
-      const laddoo = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 8), laddooMat);
-      laddoo.position.set(Math.cos(j * 1.3) * 0.65, 0.16, Math.sin(j * 1.3) * 0.65);
-      laddoo.userData = { isSweet: true, name: "Motichoor Laddoo (Sacred Saffron Sweet)" };
-      group.add(laddoo);
-      this.sweetMeshes.push(laddoo);
+    // motichoor laddoos: bumpy boondi spheres stacked in the centre
+    const ladGeom = new THREE.IcosahedronGeometry(0.19, 3);
+    const lp = ladGeom.attributes.position;
+    const v = new THREE.Vector3();
+    for (let i = 0; i < lp.count; i++) {
+      v.fromBufferAttribute(lp, i);
+      v.multiplyScalar(1 + (Math.sin(v.x * 90) * Math.sin(v.y * 87) * Math.sin(v.z * 93)) * 0.05);
+      lp.setXYZ(i, v.x, v.y, v.z);
     }
+    ladGeom.computeVertexNormals();
+    const ladMat = new THREE.MeshStandardMaterial({ color: 0xf0861c, roughness: 0.75 });
+    [[0, 0.2, 0], [0.34, 0.2, 0.1], [-0.3, 0.2, 0.18], [0.05, 0.2, -0.34], [0.02, 0.5, 0.0]].forEach((p) => {
+      const l = new THREE.Mesh(ladGeom, ladMat);
+      l.position.set(p[0], p[1], p[2]);
+      l.userData.name = 'Motichoor Laddoo';
+      group.add(l);
+      this.sweetMeshes.push(l);
+    });
 
-    group.position.set(6, 0.08, -2);
+    group.position.set(6, 0.02, -2);
     this.scene.add(group);
   }
 
-  // ==========================================================================
-  // AYODHYA VOLUMETRIC LASER SHOW BEAMS
-  // ==========================================================================
+  // ------------------------------------------------------------------------
   setupLaserBeams() {
-    const laserColors = [0x00ffcc, 0xff0077, 0xffd700, 0x00ff88, 0xbf5af2, 0xff9900];
-    const beamGeom = new THREE.CylinderGeometry(0.08, 0.3, 100, 8);
-    beamGeom.translate(0, 50, 0);
-
-    for (let i = 0; i < 6; i++) {
+    this.laserGroup = new THREE.Group();
+    const colors = [0x00ffd0, 0xff2a7a, 0xffc040, 0x40ff80, 0xb060ff, 0xff8a20];
+    const geom = new THREE.CylinderGeometry(0.7, 0.04, 160, 12, 1, true);
+    geom.translate(0, 80, 0);
+    const tex = createBeamTexture();
+    colors.forEach((c, i) => {
       const mat = new THREE.MeshBasicMaterial({
-        color: laserColors[i],
-        transparent: true,
-        opacity: 0,
-        blending: THREE.AdditiveBlending
+        color: new THREE.Color(c), alphaMap: tex, transparent: true, opacity: 0,
+        blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false
       });
-      const beam = new THREE.Mesh(beamGeom, mat);
-      const angle = (i / 6) * Math.PI * 2;
-      beam.position.set(Math.cos(angle) * 12, 0, -4 + Math.sin(angle) * 8);
+      const beam = new THREE.Mesh(geom, mat);
+      beam.position.set(-20 + i * 8, 0, -22);
+      beam.visible = false;
       this.laserGroup.add(beam);
-      this.laserBeams.push({ mesh: beam, baseAngle: angle, speed: 1.5 + i * 0.3 });
-    }
-
+      this.laserBeams.push({ mesh: beam, phase: i * 1.1, speed: 0.6 + i * 0.12 });
+    });
     this.scene.add(this.laserGroup);
   }
 
-  triggerLaserShow(duration = 7000) {
+  triggerLaserShow(duration = 8000) {
     this.isLaserActive = true;
-    this.laserBeams.forEach(b => {
-      b.mesh.material.opacity = 0.75;
-    });
+    clearTimeout(this.laserTimer);
+    this.laserTimer = setTimeout(() => { this.isLaserActive = false; }, duration);
+  }
 
-    setTimeout(() => {
-      this.laserBeams.forEach(b => {
-        b.mesh.material.opacity = 0;
-      });
-      this.isLaserActive = false;
-    }, duration);
+  toggleLaserShow() {
+    clearTimeout(this.laserTimer);
+    this.isLaserActive = !this.isLaserActive;
+    return this.isLaserActive;
   }
 
   performMahaAarti() {
-    if (this.isAartiActive) return;
+    if (this.isAartiActive) return false;
     this.isAartiActive = true;
     this.aartiTime = 0;
-
     audio.playRealAarti();
-
+    if (this.onAartiStart) this.onAartiStart();
     setTimeout(() => {
       this.isAartiActive = false;
-      this.aartiThali.position.set(-6, 0.1, -2);
+      this.aartiThali.position.copy(this.aartiHome);
       this.aartiThali.rotation.set(0, 0, 0);
-    }, 8000);
+    }, 9000);
+    return true;
   }
 
-  generateRangoliTexture() {
-    const canvas = document.createElement('canvas');
-    canvas.width = 1024;
-    canvas.height = 1024;
-    const ctx = canvas.getContext('2d');
-    const cx = 512;
-    const cy = 512;
-
-    ctx.clearRect(0, 0, 1024, 1024);
-
-    const rings = [
-      { r: 470, color: '#ffd700', width: 10 },
-      { r: 430, color: '#e63946', width: 16 },
-      { r: 380, color: '#fb8500', width: 20 },
-      { r: 310, color: '#00e676', width: 14 },
-      { r: 240, color: '#00d4ff', width: 12 },
-      { r: 150, color: '#ffb703', width: 24 },
-      { r: 70,  color: '#e63946', width: 14 }
-    ];
-
-    rings.forEach(ring => {
-      ctx.beginPath();
-      ctx.arc(cx, cy, ring.r, 0, Math.PI * 2);
-      ctx.strokeStyle = ring.color;
-      ctx.lineWidth = ring.width;
-      ctx.stroke();
-    });
-
-    const numPetals = 16;
-    for (let i = 0; i < numPetals; i++) {
-      const angle = (i / numPetals) * Math.PI * 2;
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(angle);
-
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.quadraticCurveTo(80, 260, 0, 420);
-      ctx.quadraticCurveTo(-80, 260, 0, 0);
-      ctx.fillStyle = i % 2 === 0 ? 'rgba(230, 57, 70, 0.85)' : 'rgba(251, 133, 0, 0.85)';
-      ctx.fill();
-      ctx.strokeStyle = '#ffd700';
-      ctx.lineWidth = 4;
-      ctx.stroke();
-
-      ctx.restore();
-    }
-
-    for (let i = 0; i < 8; i++) {
-      const angle = (i / 8) * Math.PI * 2;
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(angle);
-
-      ctx.beginPath();
-      ctx.arc(0, 180, 20, 0, Math.PI * 2);
-      ctx.fillStyle = '#ffd700';
-      ctx.fill();
-
-      ctx.restore();
-    }
-
-    return canvas;
-  }
-
-  update(delta) {
-    if (this.waterMesh) {
-      this.waterClock += delta * 1.2;
-      this.waterMesh.position.y = -2.4 + Math.sin(this.waterClock) * 0.04;
-      this.waterMesh.rotation.z = Math.sin(this.waterClock * 0.4) * 0.004;
-    }
-
-    if (this.starPoints) {
-      this.starPoints.rotation.y += 0.00015;
-    }
-
-    if (this.isAartiActive && this.aartiThali) {
-      this.aartiTime += delta * 1.6;
-      const radius = 2.8;
-      const x = Math.cos(this.aartiTime) * radius;
-      const z = -4 + Math.sin(this.aartiTime) * radius;
-      const y = 2.0 + Math.sin(this.aartiTime * 2) * 0.35;
-
-      this.aartiThali.position.set(x, y, z);
-      this.aartiThali.rotation.z = Math.sin(this.aartiTime) * 0.2;
-      this.aartiThali.rotation.y += delta * 2;
-    }
-
-    // Laser Show Beam Sweeps
-    if (this.isLaserActive) {
-      const time = Date.now() * 0.002;
-      this.laserBeams.forEach(b => {
-        b.mesh.rotation.z = Math.sin(time * b.speed) * 0.45;
-        b.mesh.rotation.x = Math.cos(time * b.speed * 0.8) * 0.35;
-      });
-    }
-  }
-
+  // ------------------------------------------------------------------------
+  // The Blender model: only its brass panch-pradip lamp is used, on its own
+  // plinth. Its Blender lights (exported at studio wattage) were blowing the
+  // whole courtyard out to white, so they are stripped, and its static
+  // flames are replaced with live ones.
+  // ------------------------------------------------------------------------
   setupBlenderModel() {
-    this.blenderGroup = new THREE.Group();
-    this.blenderGroup.position.set(0, 0.05, 0);
-    this.scene.add(this.blenderGroup);
+    this.shrineLight = new THREE.PointLight(0xffa850, 0, 14, 1.8);
+    this.shrineLight.position.set(0, 3.4, -11);
+    this.scene.add(this.shrineLight);
 
     const loader = new GLTFLoader();
     loader.load(
-      '/models/diwali_scene.glb',
+      `${BASE}models/diwali_scene.glb`,
       (gltf) => {
         const model = gltf.scene;
-        model.scale.set(1.4, 1.4, 1.4);
-        model.position.set(0, 0.08, 0);
-
-        // Enhance materials for WebGL vibrancy
-        model.traverse((child) => {
-          if (child.isMesh) {
-            child.castShadow = true;
-            child.receiveShadow = true;
-            if (child.material) {
-              child.material.roughness = Math.max(0.2, child.material.roughness || 0.3);
-            }
-          }
+        const brass = new THREE.MeshStandardMaterial({ color: 0xd9a441, metalness: 1, roughness: 0.24 });
+        const remove = [];
+        const flameSpots = [];
+        model.traverse((o) => {
+          if (o === model) return;
+          const name = o.name || '';
+          if (o.isLight) remove.push(o);
+          else if (/^Aarti_Flame/.test(name)) { flameSpots.push(o.position.clone()); remove.push(o); }
+          else if (/^Aarti_Main_Light/.test(name)) remove.push(o);
+          else if (/^Aarti_/.test(name)) { if (o.isMesh) o.material = brass; }
+          else if (o.parent === model) remove.push(o);
         });
+        remove.forEach((o) => o.parent && o.parent.remove(o));
 
-        this.blenderGroup.add(model);
-        console.log('✨ Authentic Blender 3D Diwali Model loaded into WebGL scene successfully!');
+        model.scale.setScalar(2.3);
+        model.position.set(0, 0.6, -11);
+        flameSpots.forEach((p, i) => {
+          const f = createFlame({ width: 0.075, height: 0.2, halo: 0.55, seed: 20 + i * 3.1 });
+          f.position.set(p.x, 0.93, p.z);
+          model.add(f);
+          this.flames.push(f);
+        });
+        this.scene.add(model);
+        this.shrineLight.intensity = 5;
       },
       undefined,
-      (err) => {
-        console.warn('Blender 3D model load deferred:', err);
-      }
+      (err) => console.warn('Panch-pradip model could not be loaded:', err)
     );
   }
 
-  toggleBlenderModel() {
-    this.isBlenderModelVisible = !this.isBlenderModelVisible;
-    this.blenderGroup.visible = this.isBlenderModelVisible;
-    return this.isBlenderModelVisible;
+  // ------------------------------------------------------------------------
+  setupPostprocessing() {
+    this.composer = new EffectComposer(this.renderer);
+    this.composer.addPass(new RenderPass(this.scene, this.camera));
+    const res = new THREE.Vector2(window.innerWidth, window.innerHeight).multiplyScalar(0.5);
+    this.bloom = new UnrealBloomPass(res, 0.7, 0.5, 0.9);
+    this.composer.addPass(this.bloom);
+    this.composer.addPass(new OutputPass());
+  }
+
+  // ------------------------------------------------------------------------
+  setAtmosphere(mode, instant = false) {
+    this.atmoTarget = ATMOSPHERES[mode] || ATMOSPHERES.midnight;
+    if (instant || this.motion < 0.5) this.applyAtmosphere(1);
+    else this.atmoBlend = 0;
+  }
+
+  applyAtmosphere(k) {
+    const t = this.atmoTarget;
+    const lerpCol = (target, hex) => target.lerp(new THREE.Color(hex), k);
+    lerpCol(this.skyUniforms.uTop.value, t.top);
+    lerpCol(this.skyUniforms.uMid.value, t.mid);
+    lerpCol(this.skyUniforms.uHorizon.value, t.horizon);
+    lerpCol(this.skyUniforms.uGlow.value, t.glow);
+    lerpCol(this.scene.fog.color, t.fog);
+    lerpCol(this.hemi.color, t.hemiSky);
+    lerpCol(this.hemi.groundColor, t.hemiGround);
+    this.hemi.intensity += (t.hemi - this.hemi.intensity) * k;
+    this.moonLight.intensity += (t.moon - this.moonLight.intensity) * k;
+    this.renderer.toneMappingExposure += (t.exposure - this.renderer.toneMappingExposure) * k;
+    this.starUniforms.uAlpha.value += (t.stars - this.starUniforms.uAlpha.value) * k;
+  }
+
+  setMotion(m) {
+    this.motion = m;
+    flameUniforms.uMotion.value = m;
+  }
+
+  update(delta, time) {
+    this.elapsed = time;
+    flameUniforms.uTime.value = time;
+    this.starUniforms.uTime.value = time;
+    this.water.material.uniforms.time.value += delta * 0.35;
+
+    if (this.atmoBlend !== undefined && this.atmoBlend < 1) {
+      this.atmoBlend = Math.min(1, this.atmoBlend + delta * 0.8);
+      this.applyAtmosphere(Math.min(1, delta * 3));
+      if (this.atmoBlend >= 1) this.applyAtmosphere(1);
+    }
+
+    for (const f of this.flames) f.userData.tick(time);
+
+    // string lights shimmer softly
+    if (this.motion > 0.5 && this.bulbs) {
+      const c = new THREE.Color();
+      for (let i = 0; i < this.bulbBase.length; i++) {
+        const b = this.bulbBase[i];
+        const k = 0.75 + 0.25 * Math.sin(time * 2.2 + i * 0.9);
+        this.bulbs.setColorAt(i, c.setRGB(b[0] * k, b[1] * k, b[2] * k));
+      }
+      this.bulbs.instanceColor.needsUpdate = true;
+    }
+
+    // aarti: the thali is lifted and circled clockwise
+    if (this.isAartiActive) {
+      this.aartiTime += delta * 1.3;
+      const r = 2.6;
+      const a = -this.aartiTime;
+      this.aartiThali.position.set(Math.cos(a) * r, 2.0 + Math.sin(this.aartiTime * 2) * 0.3, -4 + Math.sin(a) * r);
+      this.aartiThali.rotation.z = Math.sin(this.aartiTime) * 0.12;
+    }
+
+    // laser show
+    const target = this.isLaserActive ? 1 : 0;
+    this.laserLevel += (target - this.laserLevel) * Math.min(1, delta * 3);
+    const visible = this.laserLevel > 0.01;
+    for (const b of this.laserBeams) {
+      b.mesh.visible = visible;
+      if (!visible) continue;
+      b.mesh.material.opacity = 0.22 * this.laserLevel;
+      const s = this.motion > 0.5 ? time * b.speed : 0;
+      b.mesh.rotation.z = Math.sin(s + b.phase) * 0.4;
+      // always lean away from the viewer so beams never slice across the lens
+      b.mesh.rotation.x = -0.3 + Math.cos(s * 0.8 + b.phase) * 0.18;
+    }
+  }
+
+  render() {
+    this.composer.render();
   }
 
   onWindowResize() {
-    this.camera.aspect = window.innerWidth / window.innerHeight;
+    const w = window.innerWidth, h = window.innerHeight;
+    this.camera.aspect = w / h;
+    // narrow phones get a wider lens so the courtyard still fits
+    this.camera.fov = this.camera.aspect < 0.8 ? 66 : this.camera.aspect < 1.2 ? 58 : 50;
     this.camera.updateProjectionMatrix();
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.setSize(w, h);
+    this.composer.setPixelRatio(this.renderer.getPixelRatio());
+    this.composer.setSize(w, h);
+    this.bloom.setSize(w * 0.5, h * 0.5);
+    this.starUniforms.uPixel.value = this.renderer.getPixelRatio();
   }
 }
